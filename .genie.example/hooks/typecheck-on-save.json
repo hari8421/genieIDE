@@ -1,0 +1,12 @@
+{
+  "name": "typecheck-on-save",
+  "when": {
+    "type": "fileEdited",
+    "patterns": ["src/**/*.ts", "src/**/*.tsx"]
+  },
+  "then": {
+    "type": "command",
+    "command": "npm run typecheck"
+  },
+  "enabled": false
+}

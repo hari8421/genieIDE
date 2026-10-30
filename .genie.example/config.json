@@ -1,0 +1,11 @@
+{
+  "lmStudioBaseUrl": "http://127.0.0.1:1234/v1",
+  "model": "qwen2.5-coder-14b-instruct",
+  "temperature": 0.2,
+  "maxTokens": 2048,
+  "contextBudgetTokens": 8192,
+  "reserveOutputTokens": 2048,
+  "maxAgentSteps": 24,
+  "autonomy": "autopilot",
+  "allowCommands": true
+}

@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+*.log
+
+# Runtime state: specs, journals, checkpoints, local config
+.genie/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
