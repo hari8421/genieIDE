@@ -14,10 +14,12 @@ Stage: **M2 — local-first agentic IDE with desktop executables, pluggable prov
 | Type safety | `npm run typecheck` (`tsc --noEmit`) | passing |
 | Production bundle | `npm run build` (typecheck + `vite build`) | passing |
 | Desktop executables | `node scripts/build-desktop.mjs` | **exit 0**, three binaries (Linux 78 MB, macOS arm64 70 MB, Windows 97 MB) |
+| Runtime end-to-end | stub OpenAI-compatible server + 24-check driver | **24/24** against the `tsx` server *and* the packaged Linux binary: provider routing, bearer key, SSE run, pinned memory in the prompt, `remember` tool, fact delete, path escape, SPA assets |
 | Packaged binary smoke test | `pkg-out/genie/genie-ide-linux-x64` → `/api/health`, `/api/memory`, `/` | passing (real HTTP responses served from the binary) |
+| Memory across restarts | restart the binary on the same workspace | passing — `core.md` rebuilt from `facts.jsonl`, facts and event count intact |
 | HTTP smoke test | bundled server + `/api/health`, `/api/files` | passing |
 | Real LM Studio end-to-end | requires a local model | **not verified here** — no model server exists in the cloud runner |
-| macOS / Windows binaries executed | requires those hosts | **not verified** — only the Linux binary was run |
+| macOS / Windows binaries executed | requires those hosts | **not verified** — format-checked (Mach-O arm64, PE32+ x86-64) but only the Linux ELF was run |
 
 The suite is not a smoke test: it starts a real API server against a temporary workspace, spawns
 a real MCP child process, and drives the agent loop through success, tool failure, context
