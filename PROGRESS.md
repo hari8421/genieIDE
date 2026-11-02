@@ -1,8 +1,8 @@
 # genie — Progress
 
-Last updated: 2026-10-30
+Last updated: 2026-11-02
 Branch: `main`
-Stage: **M1 complete — local agentic IDE with spec workflow, self-healing runs and reversible edits.**
+Stage: **M2 — local-first agentic IDE with desktop executables, pluggable providers and cross-run agent memory.**
 
 ---
 
@@ -10,11 +10,14 @@ Stage: **M1 complete — local agentic IDE with spec workflow, self-healing runs
 
 | Gate | Command | Result |
 | --- | --- | --- |
-| Unit + integration tests | `npm test` | **10 files, 93 tests passing** |
+| Unit + integration tests | `npm test` | **12 files, 105 tests passing** |
 | Type safety | `npm run typecheck` (`tsc --noEmit`) | passing |
 | Production bundle | `npm run build` (typecheck + `vite build`) | passing |
-| HTTP smoke test | built server + `/api/health`, `/api/files` | passing |
+| Desktop executables | `node scripts/build-desktop.mjs` | **exit 0**, three binaries (Linux 78 MB, macOS arm64 70 MB, Windows 97 MB) |
+| Packaged binary smoke test | `pkg-out/genie/genie-ide-linux-x64` → `/api/health`, `/api/memory`, `/` | passing (real HTTP responses served from the binary) |
+| HTTP smoke test | bundled server + `/api/health`, `/api/files` | passing |
 | Real LM Studio end-to-end | requires a local model | **not verified here** — no model server exists in the cloud runner |
+| macOS / Windows binaries executed | requires those hosts | **not verified** — only the Linux binary was run |
 
 The suite is not a smoke test: it starts a real API server against a temporary workspace, spawns
 a real MCP child process, and drives the agent loop through success, tool failure, context
@@ -26,6 +29,10 @@ overflow, cancellation and resume paths.
 
 ### Model layer
 - [x] OpenAI-compatible client for LM Studio (`server/llm/client.ts`)
+- [x] **Provider switch**: LM Studio (default) or any external OpenAI-compatible API
+      (`provider`, `externalBaseUrl`, `externalModel`, `externalApiKey`)
+- [x] API key sent as a bearer token; key lives in `.genie/config.json` (git-ignored) or
+      `GENIE_EXTERNAL_API_KEY`
 - [x] SSE streaming with incremental assistant text
 - [x] Tool-call assembly from fragmented deltas
 - [x] Model discovery with context length (`GET /models`)
@@ -34,9 +41,29 @@ overflow, cancellation and resume paths.
 - [x] No replay after tokens have streamed
 - [x] JSON repair loop for structured output (`server/llm/structured.ts`)
 
+### Agent memory
+- [x] File-backed store under `.genie/memory/` (`server/memory/store.ts`)
+- [x] Durable facts in `facts.jsonl`, deduplicated by key
+- [x] `core.md` rendered from the facts, capped at `maxCoreLines`, injected into every prompt as
+      a **pinned context section** (never dropped, only truncated under budget pressure)
+- [x] Run outcomes journaled to `events.jsonl`, pruned to `maxEvents`
+- [x] `remember` tool so the model persists conventions and gotchas itself
+- [x] `GET /api/memory`, `POST /api/memory/facts`, `DELETE /api/memory/facts/:key`
+- [x] Models tab lists, adds and forgets facts; status bar shows the memory count
+
+### Desktop app
+- [x] `scripts/build-desktop.mjs` produces standalone executables via `@yao-pkg/pkg`
+- [x] Server bundled to a single CommonJS file with esbuild; the built SPA ships as pkg assets
+- [x] Same `createServer` code path as the dev server (`server/http.ts`), so there is no
+      desktop-only behaviour to keep in sync
+- [x] `build-desktop` / `start-desktop` npm scripts; `GENIE_DESKTOP_TARGETS`,
+      `GENIE_DESKTOP_OUT`, `GENIE_DESKTOP_SKIP_PKG` overrides
+- [x] Build reports a non-zero exit when pkg fails or produces nothing, and waits for pkg's
+      outliving writers before scanning for outputs
+
 ### Agent loop
 - [x] Multi-step tool loop with a real step budget
-- [x] Tool registry: read/write/patch/list/search/run_command
+- [x] Tool registry: read/write/patch/list/search/run/remember
 - [x] Search/replace patch format with atomic multi-block apply
 - [x] Unknown-tool and invalid-JSON recovery
 - [x] Rescue of tool calls emitted as fenced JSON
@@ -56,7 +83,7 @@ overflow, cancellation and resume paths.
 ### Context engine
 - [x] Token estimation independent of tokenizer
 - [x] Budgeted assembly with priorities
-- [x] Pinned steering always retained (truncated, never dropped)
+- [x] Pinned sections (steering, memory) always retained — truncated, never dropped
 - [x] History compaction with digest note
 - [x] Hard budget invariant enforced after assembly
 - [x] Head/tail truncation with explicit marker
@@ -75,14 +102,17 @@ overflow, cancellation and resume paths.
 
 ### API + UI
 - [x] HTTP API with SSE for chat, runs, resume, spec generation, task execution
+- [x] Single router in `server/http.ts`; `server/index.ts` only boots it
 - [x] File CRUD with workspace sandboxing
-- [x] Config API (model, base URL, budget, autonomy, commands)
-- [x] React UI: file tree, Monaco editor with local workers, chat transcript, spec panel, hooks panel, undo/checkpoint panel, runs panel, status bar
+- [x] Config API (provider, endpoints, model, budget, autonomy, commands)
+- [x] Memory API (snapshot, add fact, forget fact)
+- [x] React UI: file tree, Monaco editor with local workers, chat transcript, spec panel, hooks
+      panel, undo/checkpoint panel, runs panel, models + memory panel, status bar
 - [x] Live "LM Studio offline" guidance instead of a dead run button
 - [x] Context meter and self-heal notices surfaced in the transcript
 
 ### Documentation / examples
-- [x] `README.md` (setup, usage, feature map, safety)
+- [x] `README.md` (setup, desktop build, providers, memory, feature map, safety)
 - [x] `docs/DESIGN.md` (architecture, module contracts, failure matrix, parity, roadmap)
 - [x] `.genie.example/` config, hook and steering samples
 
@@ -97,14 +127,14 @@ overflow, cancellation and resume paths.
 | Per-task verify commands | Roadmap |
 | Embedding-based retrieval | Lexical retrieval is implemented; embeddings need a local embeddings endpoint |
 | Auto-rollback after failure | Rejected on purpose: silently reverting user edits is worse than failing loudly |
-| Cloud model providers | Local-first by design |
+| Bundled provider presets (OpenAI/Groq/…) | The provider option is generic on purpose: any OpenAI-compatible base URL works, so no vendor is hard-coded |
 
 ---
 
 ## 4. Known limitations
 
 1. **Not validated against a live model in this environment.** Model interactions are covered by
-   fetch-level fakes plus a fake MCP server. The first real run should be watched: tool-call
+   fetch-level fakes plus a fake MCP child process. The first real run should be watched: tool-call
    formatting varies by model, which is exactly why the rescue path exists.
 2. Token estimates are heuristic (`max(chars/4, words×1.3)`), so the budget is conservative but
    not exact; the context-overflow healing path is the safety net.
@@ -114,6 +144,12 @@ overflow, cancellation and resume paths.
    verified, the visuals are not.
 5. `run_command` runs allow-listed commands with your shell privileges. The deny-list is a
    guardrail, not a sandbox.
+6. Only the Linux desktop binary was executed. The macOS binary is produced on Linux and is
+   **unsigned**, so macOS will kill it until it is ad-hoc signed (`codesign --sign - <binary>`);
+   the Windows binary was not run here either.
+7. Agent memory is per workspace and plain text. There is no conflict resolution across
+   concurrent processes, and no semantic search over facts — the core file is a small pinned list
+   by design.
 
 ---
 
@@ -125,3 +161,4 @@ overflow, cancellation and resume paths.
 3. Implement Cmd-K inline edit reusing the patch tool with a diff preview.
 4. Add token/wall-clock run budgets with a continue gate.
 5. Convert checkpoints to content-addressed blobs to cut disk use in large repos.
+6. Sign macOS/Windows desktop builds and add a release workflow that uploads the three binaries.

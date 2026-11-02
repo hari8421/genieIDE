@@ -1,7 +1,6 @@
 import fs from 'node:fs/promises';
 import http from 'node:http';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config';
 import { createService, type GenieService } from './service';
 import { loadSteering } from './steering/steering';
@@ -145,6 +144,28 @@ function registerRoutes(): void {
     json(res, 200, await service.health());
   });
 
+  route('GET', '/api/memory', async ({ res }) => {
+    json(res, 200, await service.memorySnapshot());
+  });
+
+  route('POST', '/api/memory/facts', async ({ req, res }) => {
+    const body = await readJson(req);
+    const key = text(body.key).trim();
+    const value = text(body.value).trim();
+    if (!key || !value) {
+      json(res, 400, { error: 'Both key and value are required' });
+      return;
+    }
+    const tags = strArray(body.tags);
+    const fact = await service.rememberFact({ key, value, ...(tags.length ? { tags } : {}) });
+    json(res, 200, fact);
+  });
+
+  route('DELETE', '/api/memory/facts/:key', async ({ res, params }) => {
+    const removed = await service.forgetFact(params.key ?? '');
+    json(res, removed ? 200 : 404, { removed });
+  });
+
   route('GET', '/api/models', async ({ res }) => {
     try {
       json(res, 200, { models: await service.listModels() });
@@ -158,6 +179,10 @@ function registerRoutes(): void {
     const patch: Record<string, unknown> = {};
     if (typeof body.model === 'string') patch.model = body.model;
     if (typeof body.lmStudioBaseUrl === 'string') patch.lmStudioBaseUrl = body.lmStudioBaseUrl;
+    if (body.provider === 'lmstudio' || body.provider === 'external') patch.provider = body.provider;
+    if (typeof body.externalBaseUrl === 'string') patch.externalBaseUrl = body.externalBaseUrl;
+    if (typeof body.externalModel === 'string') patch.externalModel = body.externalModel;
+    if (typeof body.externalApiKey === 'string') patch.externalApiKey = body.externalApiKey;
     if (typeof body.contextBudgetTokens === 'number') patch.contextBudgetTokens = body.contextBudgetTokens;
     if (body.autonomy === 'autopilot' || body.autonomy === 'supervised') patch.autonomy = body.autonomy;
     if (typeof body.maxAgentSteps === 'number') patch.maxAgentSteps = body.maxAgentSteps;
@@ -490,7 +515,9 @@ const CONTENT_TYPES: Record<string, string> = {
 const PORT = Number(process.env.GENIE_PORT ?? 8787);
 const HOST = process.env.GENIE_HOST ?? '127.0.0.1';
 const WORKSPACE = path.resolve(process.env.GENIE_WORKSPACE ?? process.env.GENIE_ROOT ?? process.cwd());
-const EMBEDDED_DIST = process.env.GENIE_EMBEDDED_DIST ?? path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
+// Resolved lazily-ish: the desktop bundle passes an explicit directory, and the
+// dev server serves ./dist from the project root.
+const EMBEDDED_DIST = process.env.GENIE_EMBEDDED_DIST ?? path.join(process.cwd(), 'dist');
 
 let service: GenieService;
 

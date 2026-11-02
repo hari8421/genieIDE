@@ -1,1 +1,1 @@
-export type { ChanceManager, Fact, MemoryEvent, MemoryVersion, QueryOptions, QueryResult } from './memory/types';
+export type { Fact, MemoryEvent, MemoryEventKind, MemorySettings, MemorySnapshot } from './memory/types';

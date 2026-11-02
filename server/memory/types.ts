@@ -1,57 +1,35 @@
+/** A durable fact the agent has learned and wants to keep across runs. */
 export interface Fact {
   readonly key: string;
   readonly value: string;
-  readonly sourceSessionId: string;
+  /** Run that introduced the fact; empty for user-authored facts. */
+  readonly runId: string;
   readonly ts: number;
-  readonly confidence?: number;
   readonly tags?: string[];
 }
 
+export type MemoryEventKind = 'run.start' | 'run.end' | 'fact' | 'note';
+
+/** Append-only history entry. Cheap to write, never rewritten. */
 export interface MemoryEvent {
-  readonly kind: 'message' | 'task' | 'tool' | 'fact' | 'meta';
-  readonly sessionId: string;
-  readonly timestamp: number;
+  readonly kind: MemoryEventKind;
+  readonly runId: string;
+  readonly ts: number;
   readonly body: string;
-  readonly meta?: Record<string, unknown>;
 }
 
-export interface MemoryVersion {
-  readonly core: string;
-  readonly events: number;
-  readonly facts: number;
+export interface MemorySettings {
+  /** Hard cap on core.md lines so pinned memory cannot flood the prompt. */
+  readonly maxCoreLines: number;
+  /** Events kept before the oldest are dropped. */
+  readonly maxEvents: number;
 }
 
-export interface QueryOptions {
-  readonly sessionId?: string;
-  readonly sessionTag?: string;
-}
-
-export interface QueryResult {
+/** What the UI and the prompt builder need to know about memory. */
+export interface MemorySnapshot {
   readonly core: string;
   readonly facts: readonly Fact[];
+  readonly events: number;
+  readonly coreLines: number;
   readonly coreBytes: number;
-}
-
-export interface ChanceManager {
-  onFactsChanged(): void;
-  currentTag(): string;
-}
-
-export interface CoreSnapshot {
-  readonly text: string;
-  readonly lineCount: number;
-  readonly bytes: number;
-}
-
-export interface Geneproperties {
-  readonly maxCoreLines: number;
-  readonly contextBudgetTokens: number;
-}
-
-export interface MemoryIndex {
-  readonly factCount: () => Promise<number>;
-  readonly query: (tag: string) => Promise<readonly Fact[]>;
-  readonly addAll: (facts: readonly Fact[]) => Promise<void>;
-  readonly sweep: () => void;
-  readonly pruneEventsBefore: (ts: number) => Promise<void>;
 }

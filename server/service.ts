@@ -6,9 +6,10 @@ import { runAgent, type AgentEvent, type AgentResult } from './agent/loop';
 import { AGENT_SYSTEM_PROMPT, TASK_AGENT_PROMPT } from './agent/prompts';
 import type { ContextSection } from './context/builder';
 import { retrieveFiles } from './context/retrieval';
-import { geniePaths, loadConfig, type Autonomy, type GenieConfig } from './config';
+import { geniePaths, loadConfig, resolveEndpoint, type Autonomy, type GenieConfig } from './config';
 import { HookEngine, loadHooks, type HookDefinition, type HookEvent, type HookRunResult } from './hooks/hooks';
 import { LMStudioClient, type ChatMessage } from './llm/client';
+import { AgentMemory, type Fact, type MemorySnapshot } from './memory';
 import { loadMcpConfig, McpClient, mcpTools, type McpTool } from './mcp/client';
 import { generateSpec, type GenerateSpecResult } from './spec/generator';
 import { SpecStore, parseTasks, type SpecTask } from './spec/spec';
@@ -46,6 +47,7 @@ export class GenieService {
   private readonly tools: Tool[];
   private readonly specStore: SpecStore;
   private readonly checkpoints: CheckpointStore;
+  private readonly memory: AgentMemory;
   private hookEngine: HookEngine;
   private readonly active = new Map<string, AbortController>();
   private mcpClients: McpClient[] = [];
@@ -53,19 +55,27 @@ export class GenieService {
 
   constructor(config: GenieConfig) {
     this.config = config;
-    this.client = new LMStudioClient({
-      baseUrl: config.lmStudioBaseUrl,
-      model: config.model,
-      temperature: config.temperature,
-      maxTokens: config.maxTokens,
-      timeoutMs: config.requestTimeoutMs,
-      maxAttempts: config.maxAttempts,
-    });
+    this.client = this.createClient();
+    this.memory = new AgentMemory(path.join(geniePaths(config.workspaceRoot).genie, 'memory'));
     this.tools = createDefaultTools();
     const paths = geniePaths(config.workspaceRoot);
     this.specStore = new SpecStore(paths.specs);
     this.checkpoints = new CheckpointStore(config.workspaceRoot, paths.checkpoints);
     this.hookEngine = new HookEngine([], async () => ({ ok: true }));
+  }
+
+  /** Build an LLM client for whichever provider the config selects. */
+  private createClient(): LMStudioClient {
+    const endpoint = resolveEndpoint(this.config);
+    return new LMStudioClient({
+      baseUrl: endpoint.baseUrl,
+      model: endpoint.model,
+      ...(endpoint.apiKey ? { apiKey: endpoint.apiKey } : {}),
+      temperature: this.config.temperature,
+      maxTokens: this.config.maxTokens,
+      timeoutMs: this.config.requestTimeoutMs,
+      maxAttempts: this.config.maxAttempts,
+    });
   }
 
   async init(): Promise<void> {
@@ -78,6 +88,7 @@ export class GenieService {
       ensureDir(paths.hooks),
       ensureDir(paths.steering),
     ]);
+    await this.memory.init();
     await this.reloadHooks();
   }
 
@@ -101,6 +112,10 @@ export class GenieService {
     const persisted = {
       lmStudioBaseUrl: next.lmStudioBaseUrl,
       model: next.model,
+      provider: next.provider,
+      externalBaseUrl: next.externalBaseUrl,
+      externalModel: next.externalModel,
+      externalApiKey: next.externalApiKey,
       temperature: next.temperature,
       maxTokens: next.maxTokens,
       contextBudgetTokens: next.contextBudgetTokens,
@@ -112,35 +127,36 @@ export class GenieService {
     await fs.writeFile(paths.config, JSON.stringify(persisted, null, 2));
     await this.closeMcp();
     this.config = next;
-    this.client = new LMStudioClient({
-      baseUrl: next.lmStudioBaseUrl,
-      model: next.model,
-      temperature: next.temperature,
-      maxTokens: next.maxTokens,
-      timeoutMs: next.requestTimeoutMs,
-      maxAttempts: next.maxAttempts,
-    });
+    this.client = this.createClient();
     return next;
   }
 
   async health() {
+    const endpoint = resolveEndpoint(this.config);
     const studio = await this.client.health();
     return {
       ok: studio.ok,
       lmStudio: {
         ...studio,
-        model: this.config.model,
-        loaded: studio.models.some((m) => m.id === this.config.model),
+        provider: endpoint.provider,
+        model: endpoint.model,
+        loaded: studio.models.some((m) => m.id === endpoint.model),
       },
       config: {
         workspaceRoot: this.config.workspaceRoot,
-        model: this.config.model,
+        provider: endpoint.provider,
+        model: endpoint.model,
+        baseUrl: endpoint.baseUrl,
         lmStudioBaseUrl: this.config.lmStudioBaseUrl,
+        externalBaseUrl: this.config.externalBaseUrl,
+        externalModel: this.config.externalModel,
+        hasApiKey: Boolean(this.config.externalApiKey),
         contextBudgetTokens: this.config.contextBudgetTokens,
         autonomy: this.config.autonomy,
         maxSteps: this.config.maxAgentSteps,
         allowCommands: this.config.allowCommands,
       },
+      memory: await this.memorySummary(),
       hooks: this.hookEngine.definitions.length,
       mcp: { servers: this.mcpClients.length, tools: this.mcpToolList.length },
       runs: (await listRuns(geniePaths(this.config.workspaceRoot).runs)).length,
@@ -166,6 +182,19 @@ export class GenieService {
     query?: string,
   ): Promise<ContextSection[]> {
     const sections: ContextSection[] = [];
+    // Pinned memory goes first and is never dropped: it is the agent's
+    // cross-run knowledge, and it is capped at maxCoreLines by the store.
+    const core = await this.memory.readCore();
+    if (core.trim()) {
+      sections.push({
+        id: 'memory:core',
+        kind: 'memory',
+        title: 'Agent memory (facts learned in earlier runs)',
+        content: core,
+        priority: 96,
+        pinned: true,
+      });
+    }
     const steering = await loadSteering(geniePaths(this.config.workspaceRoot).steering);
     sections.push(...steeringSections(selectSteering(steering, files)));
 
@@ -236,7 +265,52 @@ export class GenieService {
   }
 
   private async allTools(): Promise<Tool[]> {
-    return [...this.tools, ...mcpToolsFor(this.mcpClients, this.mcpToolList)];
+    return [...this.tools, this.rememberTool(), ...mcpToolsFor(this.mcpClients, this.mcpToolList)];
+  }
+
+  /** Lets the model persist a durable fact so later runs start informed. */
+  private rememberTool(): Tool {
+    return {
+      name: 'remember',
+      description:
+        'Persist a durable fact about this project so future runs know it (conventions, the command that actually runs the tests, a gotcha). One short sentence per fact; skip facts that are obvious from the code.',
+      parameters: {
+        type: 'object',
+        properties: {
+          key: { type: 'string', description: 'Short stable label, e.g. "test command" or "api style"' },
+          value: { type: 'string', description: 'The fact itself, one sentence' },
+          tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags' },
+        },
+        required: ['key', 'value'],
+      },
+      run: async (args) => {
+        const key = typeof args.key === 'string' ? args.key.trim() : '';
+        const value = typeof args.value === 'string' ? args.value.trim() : '';
+        if (!key || !value) return { ok: false, content: 'remember needs both a key and a value' };
+        const tags = Array.isArray(args.tags)
+          ? args.tags.filter((tag): tag is string => typeof tag === 'string')
+          : undefined;
+        const fact = await this.memory.addFact({ key, value, ...(tags?.length ? { tags } : {}) });
+        return { ok: true, content: `Remembered "${fact.key}".` };
+      },
+    };
+  }
+
+  async memorySnapshot(): Promise<MemorySnapshot> {
+    return this.memory.snapshot();
+  }
+
+  async rememberFact(input: { key: string; value: string; tags?: string[] }): Promise<Fact> {
+    return this.memory.addFact(input);
+  }
+
+  async forgetFact(key: string): Promise<boolean> {
+    return this.memory.forgetFact(key);
+  }
+
+  private async memorySummary(): Promise<{ facts: number; events: number; coreBytes: number }> {
+    const snapshot = await this.memory.snapshot();
+    return { facts: snapshot.facts.length, events: snapshot.events, coreBytes: snapshot.coreBytes };
   }
 
   private async startRun(request: RunRequest, journal: RunJournal): Promise<AgentResult> {
@@ -273,6 +347,16 @@ export class GenieService {
         checkpointOnWrite: true,
         onEvent: request.onEvent,
       });
+
+      await this.memory
+        .recordRun({
+          runId: journal.id,
+          goal: request.goal,
+          status: result.status,
+          message: result.message,
+          steps: result.steps,
+        })
+        .catch(() => undefined);
 
       if (request.specId && request.taskId && result.status === 'completed') {
         try {

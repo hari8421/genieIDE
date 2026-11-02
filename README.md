@@ -22,6 +22,7 @@ OpenAI-compatible endpoint.
 | Spec generation (requirements → design → tasks) | ✅ | `server/spec/generator.ts` |
 | Task-by-task execution with checkbox tracking | ✅ | `server/service.ts`, `server/spec/spec.ts` |
 | LM Studio models (list, switch, context length) | ✅ | `server/llm/client.ts` |
+| External OpenAI-compatible APIs (optional) | ✅ | `server/config.ts`, `server/llm/client.ts` |
 | Streaming chat + streaming agent events (SSE) | ✅ | `server/llm/client.ts`, `server/index.ts` |
 | Tool use: read, write, patch, list, search, run | ✅ | `server/tools/index.ts` |
 | Resumable runs after a crash or cancel | ✅ | `server/agent/journal.ts`, `server/agent/loop.ts` |
@@ -31,6 +32,8 @@ OpenAI-compatible endpoint.
 | Steering files (`always` / `auto` / `manual`) | ✅ | `server/steering/steering.ts` |
 | MCP client (stdio, tools/list, tools/call) | ✅ | `server/mcp/client.ts` |
 | Context budgeting, history compaction, retrieval | ✅ | `server/context/*` |
+| Agent memory: pinned facts + run journal | ✅ | `server/memory/*` |
+| Desktop executables (Linux, macOS, Windows) | ✅ | `scripts/build-desktop.mjs` |
 | Autopilot vs supervised tool approval | ✅ | `server/agent/loop.ts` |
 | Local Monaco editor with bundled workers (works offline) | ✅ | `src/monaco-setup.ts` |
 | LSP, debugger, extension marketplace, inline ghost text | ❌ | out of scope (needs Code OSS fork) |
@@ -71,6 +74,24 @@ npm run build
 npm start          # http://127.0.0.1:8787
 ```
 
+### Desktop app
+
+Build standalone executables that bundle the server *and* the UI, so the target machine needs no
+Node install:
+
+```bash
+npm run build-desktop     # typecheck + vite build + three binaries in pkg-out/genie/
+./pkg-out/genie/genie-ide-linux-x64
+```
+
+One `pkg` run produces `genie-ide-linux-x64`, `genie-ide-macos-arm64` and
+`genie-ide-win-x64.exe`. The binary serves the same app on <http://127.0.0.1:8787> — it does not
+open a window, so keep it running and use your browser. The macOS binary is cross-built and
+unsigned, so run `codesign --sign - pkg-out/genie/genie-ide-macos-arm64` before launching it there.
+
+`GENIE_DESKTOP_TARGETS=node24-linux-x64` narrows the build, `GENIE_DESKTOP_SKIP_PKG=1` stops after
+staging the bundle (useful in CI), and `GENIE_PORT` / `GENIE_WORKSPACE` behave as they do in dev.
+
 ### Using a different host/port for LM Studio
 
 `.genie/config.json`:
@@ -81,6 +102,27 @@ npm start          # http://127.0.0.1:8787
 
 or environment variables: `LMSTUDIO_BASE_URL`, `GENIE_MODEL`, `GENIE_CONTEXT_BUDGET`,
 `GENIE_AUTONOMY=supervised`, `GENIE_MAX_STEPS`, `GENIE_MAX_ATTEMPTS`, `GENIE_ALLOW_COMMANDS`.
+
+### Using an external model API (optional)
+
+Local models stay the default, but any OpenAI-compatible API can be used instead — handy when one
+task needs more reasoning than your machine can serve. Set it in the **Models** tab, or in
+`.genie/config.json`:
+
+```json
+{
+  "provider": "external",
+  "externalBaseUrl": "https://api.openai.com/v1",
+  "externalModel": "gpt-4o-mini",
+  "externalApiKey": "sk-…"
+}
+```
+
+Environment equivalents: `GENIE_PROVIDER=external`, `GENIE_EXTERNAL_BASE_URL`,
+`GENIE_EXTERNAL_MODEL`, `GENIE_EXTERNAL_API_KEY`. The client only speaks `/chat/completions` with
+SSE and tool calls, so OpenAI, Groq, OpenRouter, Together, DeepSeek and self-hosted gateways all
+work — you need a base URL, a model name and a key, nothing vendor-specific. `.genie/` is
+git-ignored, and `GENIE_EXTERNAL_API_KEY` keeps the key out of any file entirely.
 
 ## Daily use
 
@@ -93,6 +135,9 @@ or environment variables: `LMSTUDIO_BASE_URL`, `GENIE_MODEL`, `GENIE_CONTEXT_BUD
 4. **Undo tab** — a snapshot is taken before every mutating tool call. Diff or restore it.
 5. **Runs tab** — every run is journaled. Resume an interrupted run; completed steps and tool
    calls are not replayed.
+6. **Models tab** — switch between LM Studio and an external OpenAI-compatible API, and review the
+   agent's memory. Facts there are pinned into every prompt; the agent also writes its own with the
+   `remember` tool.
 
 ## How the self-healing works
 
@@ -113,16 +158,19 @@ or environment variables: `LMSTUDIO_BASE_URL`, `GENIE_MODEL`, `GENIE_CONTEXT_BUD
 server/
   agent/        loop.ts (the agent), journal.ts (durability), checkpoints.ts, patch.ts, prompts.ts
   context/      builder.ts (budgeting), retrieval.ts (lexical search)
-  llm/          client.ts (LM Studio), retry.ts, structured.ts
+  llm/          client.ts (LM Studio or any OpenAI-compatible API), retry.ts, structured.ts
+  memory/       store.ts (facts.jsonl, core.md, events.jsonl)
   tools/        sandboxed file/shell tools
   spec/         spec store + three-stage generator
   hooks/        event → action engine
   steering/     project convention files
   mcp/          minimal stdio MCP client
   service.ts    orchestration
-  index.ts      HTTP + SSE API
+  http.ts       HTTP + SSE API (single router, shared by dev and desktop)
+  index.ts      dev entrypoint; boots http.ts
+scripts/        dev.mjs, build-desktop.mjs
 src/            React + Monaco UI
-tests/          vitest suite (93 tests)
+tests/          vitest suite (105 tests)
 docs/DESIGN.md  detailed design
 PROGRESS.md     what is done, what is not
 ```
@@ -139,7 +187,8 @@ The suite covers retry/backoff/circuit breaking, token budgeting invariants, his
 compaction, patch atomicity, path-escape rejection (including symlinks), journal durability with
 torn writes, checkpoint restore, hook dispatch isolation, spec task parsing, LM Studio SSE
 streaming and tool-call assembly, agent resume without replaying tools, context-overflow
-healing, MCP stdio round-trips, and a live HTTP integration test against a temp workspace.
+healing, MCP stdio round-trips, agent memory (fact dedup, core line cap, event pruning), provider
+resolution, and a live HTTP integration test against a temp workspace.
 
 ## Safety
 

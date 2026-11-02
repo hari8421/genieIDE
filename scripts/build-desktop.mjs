@@ -1,23 +1,22 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync, copyFileSync, existsSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, dirname, resolve, basename } from 'node:path';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
 const PKGDIST = join(ROOT, '.desktop-pkg-dist');
 const OUT = join(ROOT, 'pkg-out');
+const ENTRY = join(ROOT, '.desktop-entry.ts');
 
 process.env.NODE_ENV = 'production';
 
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
-const DEFAULT_TARGETS = pkg['pkg:targets'] ?? [
-  'node24-linux-x64',
-  'node24-macos-arm64',
-  'node24-win-x64',
-].join(',');
-const TARGETS = process.env.GENIE_DESKTOP_TARGETS ?? DEFAULT_TARGETS;
+const TARGETS =
+  process.env.GENIE_DESKTOP_TARGETS ??
+  pkg['pkg:targets'] ??
+  ['node24-linux-x64', 'node24-macos-arm64', 'node24-win-x64'].join(',');
 const OUT_PATH = process.env.GENIE_DESKTOP_OUT ?? join(OUT, 'genie');
 const COMPRESS = pkg['pkg:compress'] ?? 'GZip';
 
@@ -29,85 +28,175 @@ if (!existsSync(DIST) || !existsSync(join(DIST, 'index.html'))) {
   execFileSync('npm', ['run', 'build'], { cwd: ROOT, stdio: 'inherit' });
 }
 
+// --- Stage a minimal, self-contained tree -----------------------------------
+// The SPA is copied wholesale (Vite emits hashed assets), and the server is
+// bundled into a single CommonJS file so the snapshot needs no module
+// resolution at runtime.
 rmSync(PKGDIST, { recursive: true, force: true });
 mkdirSync(PKGDIST, { recursive: true });
-copyFileSync(join(ROOT, 'package.json'), join(PKGDIST, 'package.json'));
-const stagedPkg = { ...pkg };
-delete stagedPkg['pkg:targets'];
-delete stagedPkg['pkg:compress'];
+cpSync(DIST, join(PKGDIST, 'dist'), { recursive: true });
+
+writeFileSync(ENTRY, entrySource(), 'utf8');
+try {
+  const { build } = await import('esbuild');
+  await build({
+    entryPoints: [ENTRY],
+    outfile: join(PKGDIST, 'dist', 'bin', 'genie-server.cjs'),
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    target: 'node22',
+    logLevel: 'warning',
+    legalComments: 'none',
+  });
+} finally {
+  rmSync(ENTRY, { force: true });
+}
+
 writeFileSync(
   join(PKGDIST, 'package.json'),
-  JSON.stringify({ ...stagedPkg, private: true, bin: { genie: './dist/bin/genie-server.mjs' } }, null, 2) + '\n',
-);
-mkdirSync(join(PKGDIST, 'dist'), { recursive: true });
-copyFileSync(join(DIST, 'index.html'), join(PKGDIST, 'dist', 'index.html'));
-mkdirSync(join(PKGDIST, 'dist', 'bin'), { recursive: true });
-writeFileSync(
-  join(PKGDIST, 'dist', 'bin', 'genie-server.mjs'),
-  `import { createServer } from '../server/http.js';
-import { finishShutdown } from '../server/shutdown.js';
-
-async function main() {
-  const workspace = process.env.GENIE_WORKSPACE ?? process.cwd();
-  const embeddedDist = process.env.GENIE_EMBEDDED_DIST ?? 'dist';
-  const server = await createServer({ workspace, embeddedDist });
-  const signal = server.listen();
-  signal.then(() => finishShutdown()).catch(() => undefined);
-}
-
-main().catch((error) => {
-  console.error('[genie-server] could not start:', error);
-  process.exit(1);
-});
-`,
+  `${JSON.stringify(
+    {
+      name: pkg.name,
+      version: pkg.version,
+      private: true,
+      type: 'commonjs',
+      bin: { genie: './dist/bin/genie-server.cjs' },
+      // pkg only snapshots files listed as assets; the SPA must be explicit.
+      pkg: { assets: ['dist/**/*'], scripts: [] },
+    },
+    null,
+    2,
+  )}\n`,
   'utf8',
 );
-mkdirSync(join(PKGDIST, 'server'), { recursive: true });
-for (const file of walkSync(join(ROOT, 'server'))) {
-  const rel = relative(join(ROOT, 'server'), file);
-  const dest = join(PKGDIST, 'server', rel);
-  mkdirSync(dirname(dest), { recursive: true });
-  copyFileSync(file, dest);
+
+const bundlePath = join(PKGDIST, 'dist', 'bin', 'genie-server.cjs');
+console.log(`[build-desktop] bundled server: ${relative(ROOT, bundlePath)}`);
+
+if (process.env.GENIE_DESKTOP_SKIP_PKG === '1') {
+  console.log('[build-desktop] GENIE_DESKTOP_SKIP_PKG=1 — packaging skipped');
+  process.exit(0);
 }
+
+// --- Package per platform ----------------------------------------------------
+// Prefer the locally installed @yao-pkg/pkg. `npx pkg` can otherwise resolve the
+// abandoned `pkg@5.x` from the registry, which cannot target node24.
+const LOCAL_PKG = join(ROOT, 'node_modules', '@yao-pkg', 'pkg', 'lib-es5', 'bin.js');
+if (!existsSync(LOCAL_PKG)) {
+  console.error('[build-desktop] @yao-pkg/pkg is not installed — run npm install first');
+  process.exit(1);
+}
+
+const outPaths = TARGETS.split(',').map((target) => {
+  const parts = target.trim().split('-');
+  const platform = parts[1];
+  const arch = parts.slice(2).join('-');
+  const ext = platform === 'win' ? '.exe' : '';
+  return join(OUT_PATH, `${pkg.name}-${platform}-${arch}${ext}`);
+});
 
 console.log(`[build-desktop] packaging ${TARGETS}`);
 try {
-  execFileSync('npx', [
-    'pkg',
-    PKGDIST,
-    '--target', TARGETS,
-    '--compress', COMPRESS,
-    '--out-path', OUT_PATH,
-    '--options', 'experimental-require-module',
-  ], {
-    cwd: ROOT,
-    stdio: 'inherit',
-    env: { ...process.env, NODE_OPTIONS: '' },
-  });
+  execFileSync(
+    process.execPath,
+    [
+      LOCAL_PKG,
+      PKGDIST,
+      '--target',
+      TARGETS,
+      '--compress',
+      COMPRESS,
+      '--out-path',
+      OUT_PATH,
+      '--options',
+      'experimental-require-module',
+    ],
+    { cwd: ROOT, stdio: 'inherit', env: { ...process.env, NODE_OPTIONS: '' } },
+  );
 } catch {
   console.error('[build-desktop] pkg failed — check the output above');
   process.exit(1);
 }
 
-// Accept the actual built binaries under pkg-out. pkg names outputs like
-// genie-ide-linux-x64 / genie-ide-macos-arm64 / genie-ide-win-x64.exe.
-const allFiles = walkSync(OUT);
-const binaries = allFiles.filter((f) => {
-  const name = basename(f);
+// pkg spawns writers that can outlive the parent process, so its exit does not
+// mean the binaries are on disk yet. Poll the expected paths until every file
+// exists and its size holds steady between two polls.
+const expected = await (async () => {
+  const deadline = Date.now() + 120_000;
+  const sizes = new Map();
+  while (Date.now() < deadline) {
+    let allPresent = true;
+    let allStable = true;
+    for (const path of outPaths) {
+      if (!existsSync(path)) {
+        allPresent = false;
+        break;
+      }
+      const size = sizeOf(path);
+      if (size <= 0 || sizes.get(path) !== size) allStable = false;
+      sizes.set(path, size);
+    }
+    if (allPresent && allStable) return outPaths;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  return outPaths.filter((path) => existsSync(path));
+})();
+
+const files = expected.length > 0 ? expected : walkSync(OUT);
+const binaries = files.filter((file) => {
+  const name = basename(file);
   if (name.endsWith('.exe') || /^genie(-ide)?-/.test(name)) return true;
-  return sizeOf(f) >= 5_000_000;
+  return sizeOf(file) >= 5_000_000;
 });
-// Also accept the out path itself if it was written as a single file.
-if (binaries.length === 0 && existsSync(OUT_PATH) && !existsSync(OUT_PATH + '/')) {
-  binaries.push(OUT_PATH);
+if (binaries.length === 0) {
+  console.error('[build-desktop] no output binaries discovered under ' + OUT);
+  console.error('[build-desktop] files under output dir:', files.map((f) => relative(OUT, f)).join(', '));
+  process.exit(1);
 }
-console.log(`[build-desktop] found ${binaries.length} output(s)`);
+
+let allOk = true;
 for (const candidate of binaries) {
-  const stat = statSync(candidate);
-  const size = stat?.size ?? -1;
-  console.log(`[build-desktop] OK ${relative(ROOT, candidate)} (${size} bytes)`);
+  const size = sizeOf(candidate);
+  if (size < 5_000_000) {
+    console.warn(`[build-desktop] suspiciously small output: ${relative(ROOT, candidate)} (${size} bytes)`);
+    allOk = false;
+  } else {
+    console.log(`[build-desktop] OK ${relative(ROOT, candidate)} (${size} bytes)`);
+  }
 }
+if (!allOk) process.exit(1);
+
 console.log(`[build-desktop] done — binaries under ${OUT}`);
+
+function entrySource() {
+  return `import path from 'node:path';
+import { createServer, finishShutdown } from './server/http';
+
+async function main() {
+  // Bundled into dist/bin, so the copied SPA sits one level up.
+  const embeddedDist = process.env.GENIE_EMBEDDED_DIST ?? path.join(__dirname, '..');
+  const workspace = path.resolve(process.env.GENIE_WORKSPACE ?? process.cwd());
+  const server = await createServer({ workspace, embeddedDist });
+  await server.listen();
+
+  let closing = false;
+  const shutdown = async () => {
+    if (closing) return;
+    closing = true;
+    await finishShutdown().catch(() => undefined);
+    process.exit(0);
+  };
+  process.on('SIGINT', () => void shutdown());
+  process.on('SIGTERM', () => void shutdown());
+}
+
+main().catch((error) => {
+  console.error('[genie] could not start:', error);
+  process.exit(1);
+});
+`;
+}
 
 function sizeOf(path) {
   try {
@@ -125,17 +214,14 @@ function walkSync(root) {
     let entries;
     try {
       if (!statSync(dir).isDirectory()) continue;
-      entries = require('node:fs').readdirSync(dir, { withFileTypes: true });
+      entries = readdirSync(dir, { withFileTypes: true });
     } catch {
       continue;
     }
     for (const entry of entries) {
       const full = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        stack.push(full);
-      } else if (entry.isFile()) {
-        list.push(full);
-      }
+      if (entry.isDirectory()) stack.push(full);
+      else if (entry.isFile()) list.push(full);
     }
   }
   return list;

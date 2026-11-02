@@ -3,6 +3,9 @@ import path from 'node:path';
 
 export type Autonomy = 'autopilot' | 'supervised';
 
+/** Where completions come from: a local LM Studio server or a hosted API. */
+export type ModelProvider = 'lmstudio' | 'external';
+
 export interface GenieConfig {
   /** Absolute path of the workspace the agent is allowed to touch. */
   workspaceRoot: string;
@@ -10,6 +13,14 @@ export interface GenieConfig {
   lmStudioBaseUrl: string;
   /** Model identifier exactly as reported by LM Studio. */
   model: string;
+  /** Which endpoint chat requests go to. */
+  provider: ModelProvider;
+  /** OpenAI-compatible base URL used when `provider` is 'external'. */
+  externalBaseUrl: string;
+  /** Model name sent to the external provider; falls back to `model` when empty. */
+  externalModel: string;
+  /** Bearer token for the external provider. Supplied by env, never written to config.json. */
+  externalApiKey: string;
   temperature: number;
   /** Max completion tokens requested per call. */
   maxTokens: number;
@@ -31,6 +42,10 @@ export interface GenieConfig {
 export const DEFAULT_CONFIG: Omit<GenieConfig, 'workspaceRoot'> = {
   lmStudioBaseUrl: 'http://127.0.0.1:1234/v1',
   model: 'local-model',
+  provider: 'lmstudio',
+  externalBaseUrl: 'https://api.openai.com/v1',
+  externalModel: '',
+  externalApiKey: '',
   temperature: 0.2,
   maxTokens: 2048,
   contextBudgetTokens: 8192,
@@ -120,6 +135,17 @@ export function loadConfig(options: LoadConfigOptions = {}): GenieConfig {
       DEFAULT_CONFIG.lmStudioBaseUrl,
     ),
     model: str(env.GENIE_MODEL ?? file.model, DEFAULT_CONFIG.model),
+    provider:
+      str(env.GENIE_PROVIDER ?? file.provider, DEFAULT_CONFIG.provider) === 'external' ? 'external' : 'lmstudio',
+    externalBaseUrl: str(
+      env.GENIE_EXTERNAL_BASE_URL ?? file.externalBaseUrl,
+      DEFAULT_CONFIG.externalBaseUrl,
+    ),
+    externalModel: str(env.GENIE_EXTERNAL_MODEL ?? file.externalModel, DEFAULT_CONFIG.externalModel),
+    externalApiKey: str(
+      env.GENIE_EXTERNAL_API_KEY ?? file.externalApiKey,
+      DEFAULT_CONFIG.externalApiKey,
+    ),
     temperature: num(env.GENIE_TEMPERATURE ?? file.temperature, DEFAULT_CONFIG.temperature),
     maxTokens: num(env.GENIE_MAX_TOKENS ?? file.maxTokens, DEFAULT_CONFIG.maxTokens),
     contextBudgetTokens: Math.max(
@@ -147,4 +173,24 @@ export function loadConfig(options: LoadConfigOptions = {}): GenieConfig {
   };
 
   return config;
+}
+
+export interface ResolvedEndpoint {
+  provider: ModelProvider;
+  baseUrl: string;
+  model: string;
+  apiKey?: string;
+}
+
+/** The endpoint the LLM client should talk to for this config. */
+export function resolveEndpoint(config: GenieConfig): ResolvedEndpoint {
+  if (config.provider === 'external') {
+    return {
+      provider: 'external',
+      baseUrl: config.externalBaseUrl,
+      model: config.externalModel || config.model,
+      ...(config.externalApiKey ? { apiKey: config.externalApiKey } : {}),
+    };
+  }
+  return { provider: 'lmstudio', baseUrl: config.lmStudioBaseUrl, model: config.model };
 }

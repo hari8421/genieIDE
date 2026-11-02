@@ -1,6 +1,6 @@
 import { estimateTokens, truncateToTokens } from '../util/tokens';
 
-export type SectionKind = 'system' | 'steering' | 'spec' | 'task' | 'file' | 'retrieval';
+export type SectionKind = 'system' | 'steering' | 'memory' | 'spec' | 'task' | 'file' | 'retrieval';
 
 export interface ContextSection {
   id: string;

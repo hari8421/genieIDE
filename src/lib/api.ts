@@ -6,18 +6,50 @@ export interface ModelInfo {
   state?: string;
 }
 
+export type ModelProvider = 'lmstudio' | 'external';
+
+export interface MemoryFact {
+  key: string;
+  value: string;
+  runId: string;
+  ts: number;
+  tags?: string[];
+}
+
+export interface MemorySnapshot {
+  core: string;
+  facts: MemoryFact[];
+  events: number;
+  coreLines: number;
+  coreBytes: number;
+}
+
 export interface Health {
   ok: boolean;
-  lmStudio: { ok: boolean; baseUrl: string; models: ModelInfo[]; error?: string; model: string; loaded: boolean };
+  lmStudio: {
+    ok: boolean;
+    baseUrl: string;
+    models: ModelInfo[];
+    error?: string;
+    provider?: ModelProvider;
+    model: string;
+    loaded: boolean;
+  };
   config: {
     workspaceRoot: string;
+    provider: ModelProvider;
     model: string;
+    baseUrl: string;
     lmStudioBaseUrl: string;
+    externalBaseUrl: string;
+    externalModel: string;
+    hasApiKey: boolean;
     contextBudgetTokens: number;
     autonomy: Autonomy;
     maxSteps: number;
     allowCommands: boolean;
   };
+  memory: { facts: number; events: number; coreBytes: number };
   hooks: number;
   mcp: { servers: number; tools: number };
   runs: number;
@@ -127,6 +159,15 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   health: () => request<Health>('/api/health'),
+  memory: () => request<MemorySnapshot>('/api/memory'),
+  addMemoryFact: (key: string, value: string) =>
+    request<MemoryFact>('/api/memory/facts', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ key, value }),
+    }),
+  forgetMemoryFact: (key: string) =>
+    request<{ removed: boolean }>(`/api/memory/facts/${encodeURIComponent(key)}`, { method: 'DELETE' }),
   models: () => request<{ models: ModelInfo[] }>('/api/models'),
   updateConfig: (patch: Record<string, unknown>) =>
     request<{ config: Health['config'] }>('/api/config', {

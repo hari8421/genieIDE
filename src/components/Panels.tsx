@@ -4,7 +4,10 @@ import {
   stream,
   type Checkpoint,
   type CheckpointDiff,
+  type Health,
   type HookDefinition,
+  type MemorySnapshot,
+  type ModelProvider,
   type RunSummary,
   type SpecDetail,
   type SpecSummary,
@@ -405,6 +408,237 @@ export function RunsTab({
         ))}
         {!runs.length && <div className="empty">No runs yet.</div>}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Model provider + agent memory.
+ * The provider switch is what lets a run use a hosted OpenAI-compatible API
+ * instead of the local LM Studio server; memory lists what the agent keeps
+ * across runs and is injected into every prompt.
+ */
+export function ModelsTab({ health, onSaved }: { health: Health | null; onSaved: () => void | Promise<void> }) {
+  const [provider, setProvider] = useState<ModelProvider>(health?.config.provider ?? 'lmstudio');
+  const [model, setModel] = useState(health?.config.model ?? '');
+  const [lmStudioBaseUrl, setLmStudioBaseUrl] = useState(health?.config.lmStudioBaseUrl ?? '');
+  const [externalBaseUrl, setExternalBaseUrl] = useState(health?.config.externalBaseUrl ?? '');
+  const [externalModel, setExternalModel] = useState(health?.config.externalModel ?? '');
+  const [apiKey, setApiKey] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [memory, setMemory] = useState<MemorySnapshot | null>(null);
+  const [factKey, setFactKey] = useState('');
+  const [factValue, setFactValue] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!health) return;
+    setProvider(health.config.provider);
+    setModel(health.config.model);
+    setLmStudioBaseUrl(health.config.lmStudioBaseUrl);
+    setExternalBaseUrl(health.config.externalBaseUrl);
+    setExternalModel(health.config.externalModel);
+  }, [health]);
+
+  const loadMemory = useCallback(async () => {
+    try {
+      setMemory(await api.memory());
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadMemory();
+  }, [loadMemory, health?.memory.facts]);
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api.updateConfig({
+        provider,
+        ...(model.trim() ? { model: model.trim() } : {}),
+        ...(lmStudioBaseUrl.trim() ? { lmStudioBaseUrl: lmStudioBaseUrl.trim() } : {}),
+        externalBaseUrl: externalBaseUrl.trim(),
+        externalModel: externalModel.trim(),
+        ...(apiKey.trim() ? { externalApiKey: apiKey.trim() } : {}),
+      });
+      setApiKey('');
+      setNotice(`Saved. New requests go to ${provider === 'external' ? externalBaseUrl : lmStudioBaseUrl}.`);
+      await onSaved();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addFact = async () => {
+    if (!factKey.trim() || !factValue.trim()) return;
+    try {
+      await api.addMemoryFact(factKey.trim(), factValue.trim());
+      setFactKey('');
+      setFactValue('');
+      setNotice('Fact stored. It is injected into every later run.');
+      await loadMemory();
+      await onSaved();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  const forget = async (key: string) => {
+    try {
+      await api.forgetMemoryFact(key);
+      await loadMemory();
+      await onSaved();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  return (
+    <div className="panel-body">
+      <div className="list-title">Model provider</div>
+      <div className="field">
+        <select
+          className="select"
+          value={provider}
+          onChange={(event) => setProvider(event.target.value === 'external' ? 'external' : 'lmstudio')}
+        >
+          <option value="lmstudio">LM Studio (local)</option>
+          <option value="external">External OpenAI-compatible API</option>
+        </select>
+      </div>
+
+      {provider === 'lmstudio' ? (
+        <>
+          <label className="muted tiny" htmlFor="lmstudio-url">
+            Base URL
+          </label>
+          <div className="field">
+            <input
+              id="lmstudio-url"
+              className="input"
+              value={lmStudioBaseUrl}
+              placeholder="http://127.0.0.1:1234/v1"
+              onChange={(event) => setLmStudioBaseUrl(event.target.value)}
+            />
+          </div>
+          <label className="muted tiny" htmlFor="local-model">
+            Model
+          </label>
+          <div className="field">
+            <input
+              id="local-model"
+              className="input"
+              value={model}
+              placeholder="local-model"
+              onChange={(event) => setModel(event.target.value)}
+            />
+          </div>
+        </>
+      ) : (
+        <>
+          <label className="muted tiny" htmlFor="external-url">
+            Base URL (OpenAI-compatible, e.g. https://api.openai.com/v1)
+          </label>
+          <div className="field">
+            <input
+              id="external-url"
+              className="input"
+              value={externalBaseUrl}
+              placeholder="https://api.openai.com/v1"
+              onChange={(event) => setExternalBaseUrl(event.target.value)}
+            />
+          </div>
+          <label className="muted tiny" htmlFor="external-model">
+            Model
+          </label>
+          <div className="field">
+            <input
+              id="external-model"
+              className="input"
+              value={externalModel}
+              placeholder="gpt-4o-mini"
+              onChange={(event) => setExternalModel(event.target.value)}
+            />
+          </div>
+          <label className="muted tiny" htmlFor="external-key">
+            API key {health?.config.hasApiKey ? '(stored — leave blank to keep it)' : ''}
+          </label>
+          <div className="field">
+            <input
+              id="external-key"
+              className="input"
+              type="password"
+              value={apiKey}
+              placeholder={health?.config.hasApiKey ? '••••••••' : 'sk-…'}
+              onChange={(event) => setApiKey(event.target.value)}
+            />
+          </div>
+          <div className="hint tiny">
+            Stored in <code>.genie/config.json</code> on this machine only (that folder is git-ignored). You can also set{' '}
+            <code>GENIE_EXTERNAL_API_KEY</code>.
+          </div>
+        </>
+      )}
+
+      <div className="row">
+        <button className="btn primary small" onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : 'Save provider'}
+        </button>
+      </div>
+      {notice && <div className="notice small">{notice}</div>}
+
+      <div className="list-title">Agent memory</div>
+      <div className="hint tiny">
+        Facts here are pinned into the system prompt of every run. The agent can add its own with the{' '}
+        <code>remember</code> tool; {memory?.events ?? 0} run event(s) are journaled alongside.
+      </div>
+
+      <div className="field">
+        <input
+          className="input"
+          placeholder="key, e.g. test command"
+          value={factKey}
+          onChange={(event) => setFactKey(event.target.value)}
+        />
+      </div>
+      <div className="field">
+        <input
+          className="input"
+          placeholder="value, e.g. npm test -- --runInBand"
+          value={factValue}
+          onChange={(event) => setFactValue(event.target.value)}
+          onKeyDown={(event) => event.key === 'Enter' && void addFact()}
+        />
+        <button className="btn ghost small" onClick={() => void addFact()} disabled={!factKey.trim() || !factValue.trim()}>
+          Remember
+        </button>
+      </div>
+
+      <div className="list">
+        {(memory?.facts ?? []).map((fact) => (
+          <div key={fact.key} className="list-item">
+            <div className="list-main">
+              <span className="list-title">{fact.key}</span>
+              <span className="list-meta">{fact.value}</span>
+            </div>
+            <button className="btn ghost tiny" onClick={() => void forget(fact.key)}>
+              Forget
+            </button>
+          </div>
+        ))}
+        {memory && !memory.facts.length && (
+          <div className="empty">Nothing remembered yet. Facts accrue as the agent learns this project.</div>
+        )}
+      </div>
+
+      {error && <div className="notice error">{error}</div>}
     </div>
   );
 }

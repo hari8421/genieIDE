@@ -13,8 +13,9 @@ people who run models locally.
 
 ### Goals
 
-1. **Local-only inference.** Every completion goes to an OpenAI-compatible endpoint, default
-   `http://127.0.0.1:1234/v1` (LM Studio). No keys, no cloud calls, no telemetry.
+1. **Local by default.** Every completion goes to an OpenAI-compatible endpoint, default
+   `http://127.0.0.1:1234/v1` (LM Studio). No cloud calls and no telemetry unless you explicitly
+   switch the provider to an external API (§3.12).
 2. **Spec-driven development.** A feature starts as `requirements.md` (EARS-style, stable R-IDs),
    becomes `design.md` (components, data models, testing), and is broken into `tasks.md`
    (hierarchical checkboxes). Tasks are executed one at a time against that spec.
@@ -31,8 +32,8 @@ people who run models locally.
 - LSP/debugger/extension marketplace. The editor is Monaco, so syntax highlighting and language
   workers exist, but semantic language services do not.
 - Multi-user or remote hosting. The API is loopback-only by design.
-- Cloud model providers. The architecture allows another base URL, but the product target is
-  local models.
+- Hosted-provider lock-in. An external OpenAI-compatible endpoint is supported, but no vendor is
+  hard-coded or required; the default and supported target is a local model.
 
 ---
 
@@ -44,7 +45,7 @@ people who run models locally.
 └───────────────────────────────┬──────────────────────────────────────────────────┘
                                 │  fetch + SSE (text/event-stream)
 ┌───────────────────────────────▼──────────────────────────────────────────────────┐
-│                              server/index.ts  (HTTP router, SSE)                  │
+│                    server/http.ts (HTTP router, SSE) — index.ts just boots it     │
 │                                    │                                              │
 │                              service.ts (orchestration)                           │
 │      ┌──────────────┬──────────────┼───────────────┬──────────────────┐          │
@@ -224,6 +225,78 @@ Newline-delimited JSON-RPC 2.0 over stdio: `initialize`, `notifications/initiali
 namespaced `mcp__<server>__<tool>` and appear to the loop as ordinary tools. Servers are only
 spawned on an explicit connect request, not automatically.
 
+### 3.11 `memory/` — cross-run agent memory
+
+Three files under `.genie/memory/`, all plain text so a user can read, edit or delete them:
+
+| File | Written | Read by |
+| --- | --- | --- |
+| `facts.jsonl` | `addFact` (deduplicated by key, last write wins), `forgetFact` | `renderCore`, the API |
+| `core.md` | re-rendered from the fact list on every fact change | the prompt builder |
+| `events.jsonl` | one line per finished run (`run.end`), pruned to `maxEvents` (500) | UI counts, future retrieval |
+
+```ts
+class AgentMemory {
+  addFact({ key, value, tags?, runId? }): Promise<Fact>;
+  forgetFact(key: string): Promise<boolean>;
+  listFacts(): Promise<Fact[]>;
+  readCore(): Promise<string>;
+  recordRun({ runId, goal, status, message, steps }): Promise<void>;
+  snapshot(): Promise<MemorySnapshot>;
+  prune(keep?): Promise<number>;
+}
+```
+
+Integration points, deliberately few:
+
+1. **Prompt.** `GenieService.buildSections` prepends `core.md` as a pinned `memory` section
+   (priority 96). Pinned sections are truncated, never dropped, so the agent always sees its own
+   notes — but the store caps `core.md` at `maxCoreLines` (120) lines so it cannot crowd out the
+   workspace.
+2. **Tools.** A `remember` tool is appended to the registry in `service.ts`. It is the only write
+   path the model has into memory; there is no implicit "summarise the run into facts" step
+   because that reliably produced noise.
+3. **Runs.** `startRun` records one `run.end` event after every run, so a later run can see what
+   was already attempted (`GET /api/memory` exposes the same data).
+
+Failure behaviour: a corrupt line in `facts.jsonl` or `events.jsonl` is skipped, never fatal. A
+failed memory write is swallowed for run events and surfaced as a tool error for `remember`.
+
+### 3.12 Provider switch
+
+`resolveEndpoint(config)` is the single place that decides where completions go:
+
+| `provider` | base URL | model | auth |
+| --- | --- | --- | --- |
+| `lmstudio` (default) | `lmStudioBaseUrl` | `model` | none |
+| `external` | `externalBaseUrl` | `externalModel`, falling back to `model` | `Bearer externalApiKey` if set |
+
+Layering is unchanged (defaults ← `.genie/config.json` ← environment ← overrides), so
+`GENIE_PROVIDER=external` wins over a stored value and an unknown provider string degrades to
+`lmstudio` rather than failing the boot. Because the client only speaks `/chat/completions` with
+SSE and tool calls, no per-vendor code exists: the switch is three config fields plus the
+`apiKey` the client already supported.
+
+### 3.13 Desktop packaging
+
+`scripts/build-desktop.mjs` turns the app into standalone executables:
+
+1. `vite build` produces `dist/` (SPA + hashed assets).
+2. The whole `dist/` tree is copied into `.desktop-pkg-dist/`.
+3. A generated entry (`createServer` + signal handling) is bundled with esbuild into
+   `dist/bin/genie-server.cjs` — CommonJS, because `pkg` handles CJS snapshots reliably and it
+   removes all runtime module resolution.
+4. The staged `package.json` declares `bin` (required by `pkg`) and
+   `pkg.assets: ["dist/**/*"]`, so the SPA is snapshotted as data.
+5. `@yao-pkg/pkg` is invoked through its local bin (never `npx pkg`, which can resolve the
+   abandoned `pkg@5` and cannot target `node24`) for
+   `node24-linux-x64,node24-macos-arm64,node24-win-x64`.
+
+The entry resolves assets with `path.join(__dirname, '..')`, which is the snapshot's `dist/`
+at runtime and the real `dist/` in a dev checkout. The build then polls for the expected output
+paths until their sizes are stable, because `pkg` spawns writers that outlive the parent process;
+without that wait the build reported success before the binaries existed.
+
 ---
 
 ## 4. Failure matrix (self-heal contract)
@@ -275,6 +348,8 @@ model.
 | Tools | `tools.test.ts` | sandbox escapes, beforeWrite, search/glob, command deny-list |
 | MCP | `mcp.test.ts` | initialize/list/call over stdio, config validation |
 | HTTP API | `http-api.test.ts` | live server: health offline, file CRUD, 400 on escape, specs, checkpoints |
+| Agent memory | `memory.test.ts` | fact dedup by key, forget, core rendering + line cap, event ordering/pruning, empty store |
+| Provider switch | `provider.test.ts` | local default, external from env, external from config.json, local-model fallback, unknown provider degrades |
 
 ---
 
@@ -293,7 +368,8 @@ model.
 | Inline chat / quick edit (Cmd-K) | ❌ | Planned |
 | Code OSS editor: LSP, debugger, extensions | ❌ | Monaco only; out of scope |
 | Autonomous "agent runs tests until green" | ⚠️ | Agent can run tests; no dedicated loop budget |
-| Model routing between providers | ❌ | Single endpoint by design |
+| Model routing between providers | ✅ | `provider` switch: LM Studio or any OpenAI-compatible API |
+| Cross-run agent memory | ⚠️ | Pinned facts + run journal; no semantic recall over events |
 
 ---
 
@@ -304,3 +380,5 @@ model.
 3. Embedding-based retrieval (optional local embedding endpoint) to complement lexical search.
 4. Run budgets: token and wall-clock caps with a cost-free "continue?" gate.
 5. Streaming checkpoint deltas instead of full snapshots for large workspaces.
+6. Sign the macOS/Windows desktop builds and publish them from CI.
+7. Semantic recall over `events.jsonl` once a local embedding endpoint is available.

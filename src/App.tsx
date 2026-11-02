@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import ChatPanel from './components/ChatPanel';
 import EditorPane from './components/EditorPane';
 import FileTree from './components/FileTree';
-import { CheckpointsTab, HooksTab, RunsTab, SpecsTab } from './components/Panels';
+import { CheckpointsTab, HooksTab, ModelsTab, RunsTab, SpecsTab } from './components/Panels';
 import { api, stream, type Autonomy, type FileNode, type Health, type RunSummary } from './lib/api';
 import { applyEvent, emptySession, type SessionState } from './lib/session';
 
@@ -13,7 +13,7 @@ export interface OpenFile {
   language: string;
 }
 
-type Tab = 'files' | 'specs' | 'hooks' | 'checkpoints' | 'runs';
+type Tab = 'files' | 'specs' | 'hooks' | 'checkpoints' | 'runs' | 'models';
 
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: 'files', label: 'Files' },
@@ -21,6 +21,7 @@ const TABS: Array<{ key: Tab; label: string }> = [
   { key: 'hooks', label: 'Hooks' },
   { key: 'checkpoints', label: 'Undo' },
   { key: 'runs', label: 'Runs' },
+  { key: 'models', label: 'Models' },
 ];
 
 export default function App() {
@@ -321,6 +322,7 @@ export default function App() {
           )}
 
           {tab === 'specs' && <SpecsTab busy={session.streaming} onRunTask={runSpecTask} onRunNext={runNextTask} />}
+          {tab === 'models' && <ModelsTab health={health} onSaved={refreshHealth} />}
           {tab === 'hooks' && <HooksTab running={session.streaming} />}
           {tab === 'checkpoints' && <CheckpointsTab onRestored={() => void refreshTree()} />}
           {tab === 'runs' && (
@@ -376,6 +378,7 @@ export default function App() {
         </span>
         <span className="grow" />
         {session.streaming && <span className="running">agent running…</span>}
+        <span>{health?.memory.facts ?? 0} memories</span>
         <span>{health?.hooks ?? 0} hooks</span>
         <span>{health?.mcp.tools ?? 0} MCP tools</span>
       </footer>

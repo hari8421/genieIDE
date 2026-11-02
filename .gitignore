@@ -3,6 +3,11 @@ dist/
 coverage/
 *.log
 
+# Desktop build artifacts
+pkg-out/
+.desktop-pkg-dist/
+.desktop-entry.ts
+
 # Runtime state: specs, journals, checkpoints, local config
 .genie/
 
