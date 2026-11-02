@@ -10,13 +10,14 @@ Stage: **M2 — local-first agentic IDE with desktop executables, pluggable prov
 
 | Gate | Command | Result |
 | --- | --- | --- |
-| Unit + integration tests | `npm test` | **12 files, 105 tests passing** |
+| Unit + integration tests | `npm test` | **13 files, 109 tests passing** |
 | Type safety | `npm run typecheck` (`tsc --noEmit`) | passing |
 | Production bundle | `npm run build` (typecheck + `vite build`) | passing |
 | Desktop executables | `node scripts/build-desktop.mjs` | **exit 0**, three binaries (Linux 78 MB, macOS arm64 70 MB, Windows 97 MB) |
 | Runtime end-to-end | stub OpenAI-compatible server + 24-check driver | **24/24** against the `tsx` server *and* the packaged Linux binary: provider routing, bearer key, SSE run, pinned memory in the prompt, `remember` tool, fact delete, path escape, SPA assets |
 | Packaged binary smoke test | `pkg-out/genie/genie-ide-linux-x64` → `/api/health`, `/api/memory`, `/` | passing (real HTTP responses served from the binary) |
 | Memory across restarts | restart the binary on the same workspace | passing — `core.md` rebuilt from `facts.jsonl`, facts and event count intact |
+| Provider + memory regression | `tests/provider-memory.e2e.test.ts` (in `npm test`) | the throwaway driver is now a committed test: stub provider, bearer key, real prompt asserts |
 | HTTP smoke test | bundled server + `/api/health`, `/api/files` | passing |
 | Real LM Studio end-to-end | requires a local model | **not verified here** — no model server exists in the cloud runner |
 | macOS / Windows binaries executed | requires those hosts | **not verified** — format-checked (Mach-O arm64, PE32+ x86-64) but only the Linux ELF was run |
@@ -60,6 +61,8 @@ overflow, cancellation and resume paths.
       desktop-only behaviour to keep in sync
 - [x] `build-desktop` / `start-desktop` npm scripts; `GENIE_DESKTOP_TARGETS`,
       `GENIE_DESKTOP_OUT`, `GENIE_DESKTOP_SKIP_PKG` overrides
+- [x] Opens the dashboard in the default browser on launch (`GENIE_NO_OPEN=1` opts out); a missing
+      opener warns instead of failing the start
 - [x] Build reports a non-zero exit when pkg fails or produces nothing, and waits for pkg's
       outliving writers before scanning for outputs
 

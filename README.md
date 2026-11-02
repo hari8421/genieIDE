@@ -85,9 +85,10 @@ npm run build-desktop     # typecheck + vite build + three binaries in pkg-out/g
 ```
 
 One `pkg` run produces `genie-ide-linux-x64`, `genie-ide-macos-arm64` and
-`genie-ide-win-x64.exe`. The binary serves the same app on <http://127.0.0.1:8787> — it does not
-open a window, so keep it running and use your browser. The macOS binary is cross-built and
-unsigned, so run `codesign --sign - pkg-out/genie/genie-ide-macos-arm64` before launching it there.
+`genie-ide-win-x64.exe`. The binary serves the app on <http://127.0.0.1:8787> and opens your default
+browser at it, so a double-click behaves like an app; set `GENIE_NO_OPEN=1` to keep it headless for
+servers and CI. The macOS binary is cross-built and unsigned, so run
+`codesign --sign - pkg-out/genie/genie-ide-macos-arm64` before launching it there.
 
 `GENIE_DESKTOP_TARGETS=node24-linux-x64` narrows the build, `GENIE_DESKTOP_SKIP_PKG=1` stops after
 staging the bundle (useful in CI), and `GENIE_PORT` / `GENIE_WORKSPACE` behave as they do in dev.
@@ -170,7 +171,7 @@ server/
   index.ts      dev entrypoint; boots http.ts
 scripts/        dev.mjs, build-desktop.mjs
 src/            React + Monaco UI
-tests/          vitest suite (105 tests)
+tests/          vitest suite (109 tests)
 docs/DESIGN.md  detailed design
 PROGRESS.md     what is done, what is not
 ```
@@ -188,7 +189,9 @@ compaction, patch atomicity, path-escape rejection (including symlinks), journal
 torn writes, checkpoint restore, hook dispatch isolation, spec task parsing, LM Studio SSE
 streaming and tool-call assembly, agent resume without replaying tools, context-overflow
 healing, MCP stdio round-trips, agent memory (fact dedup, core line cap, event pruning), provider
-resolution, and a live HTTP integration test against a temp workspace.
+resolution, and two live HTTP integration tests against a temp workspace: one for the API surface,
+and one that drives a stub OpenAI-compatible server and asserts against the actual request bodies
+that completions reach the configured provider with its key and that stored facts reach the prompt.
 
 ## Safety
 

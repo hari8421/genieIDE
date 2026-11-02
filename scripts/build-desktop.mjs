@@ -171,7 +171,26 @@ console.log(`[build-desktop] done — binaries under ${OUT}`);
 
 function entrySource() {
   return `import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { createServer, finishShutdown } from './server/http';
+
+// A double-clicked binary that only prints to a console nobody is watching looks
+// broken, so the desktop entry opens the UI. GENIE_NO_OPEN=1 opts out (servers,
+// CI) and a missing opener degrades to a warning instead of a failed start.
+function openBrowser(url: string): void {
+  const command: string =
+    process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
+  const args: string[] =
+    command === 'open' ? [url] : command === 'cmd' ? ['/c', 'start', '', url] : [url];
+  const fallback = () => console.warn('[genie] could not open a browser — open ' + url + ' manually');
+  try {
+    const child = spawn(command, args, { detached: true, stdio: 'ignore' });
+    child.on('error', fallback);
+    child.unref();
+  } catch {
+    fallback();
+  }
+}
 
 async function main() {
   // Bundled into dist/bin, so the copied SPA sits one level up.
@@ -179,6 +198,15 @@ async function main() {
   const workspace = path.resolve(process.env.GENIE_WORKSPACE ?? process.cwd());
   const server = await createServer({ workspace, embeddedDist });
   await server.listen();
+
+  const url =
+    'http://' + (process.env.GENIE_HOST ?? '127.0.0.1') + ':' + (process.env.GENIE_PORT ?? '8787');
+  if (process.env.GENIE_NO_OPEN === '1') {
+    console.log('[genie] browser auto-open disabled; open ' + url + ' manually');
+  } else {
+    console.log('[genie] opening ' + url);
+    openBrowser(url);
+  }
 
   let closing = false;
   const shutdown = async () => {
