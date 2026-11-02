@@ -129,6 +129,32 @@ function formatRemote(value: Record<string, unknown> | undefined): string {
   return typeof value.type === 'string' ? value.type : 'unknown';
 }
 
+/**
+ * A pkg build embeds node but exposes no built-in executable to spawn, and plain
+ * PATH lookup fails inside the snapshot bootstrap, so try absolute paths first.
+ */
+function resolveNodeBinary(): string {
+  const candidates = [
+    process.env.GENIE_NODE,
+    process.env.NODE,
+    '/usr/local/bin/node',
+    '/usr/bin/node',
+    '/opt/homebrew/bin/node',
+    'node',
+  ].filter((value): value is string => typeof value === 'string' && value.length > 0);
+  for (const candidate of candidates) {
+    try {
+      execFileSync(candidate, ['--version'], { stdio: 'ignore' });
+      return candidate;
+    } catch {
+      // try the next candidate
+    }
+  }
+  throw new Error(
+    'Debugging from the desktop build needs Node.js installed; set GENIE_NODE to a node executable',
+  );
+}
+
 export class DebugSession {
   private child: ChildProcess | null = null;
   private cdp: CdpClient | null = null;
@@ -180,16 +206,7 @@ export class DebugSession {
     // survive this bootstrap (@yao-pkg rejects --inspect-brk with "bad option").
     // Fall back to a real Node install and say so clearly when there is none.
     const packaged = Boolean((process as unknown as { pkg?: unknown }).pkg);
-    const nodeBinary = packaged ? process.env.GENIE_NODE ?? 'node' : process.execPath;
-    if (packaged) {
-      try {
-        execFileSync(nodeBinary, ['--version'], { stdio: 'ignore' });
-      } catch {
-        throw new Error(
-          'Debugging from the desktop build needs Node.js installed; set GENIE_NODE to a node executable',
-        );
-      }
-    }
+    const nodeBinary = packaged ? resolveNodeBinary() : process.execPath;
     this.child = spawn(nodeBinary, args, {
       cwd: this.workspace,
       stdio: ['ignore', 'pipe', 'pipe'],
