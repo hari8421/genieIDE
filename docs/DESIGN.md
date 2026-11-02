@@ -29,8 +29,9 @@ people who run models locally.
 ### Non-goals (deliberate)
 
 - A Code OSS fork. That is a multi-year project; `genie` is a web IDE with a real editor.
-- LSP/debugger/extension marketplace. The editor is Monaco, so syntax highlighting and language
-  workers exist, but semantic language services do not.
+- A general language-server platform and multi-runtime debug adapters. Peek/navigation for JS/TS
+  comes from Monaco's bundled TypeScript service and debugging from Node's inspector; there is no
+  LSP client and no DAP adapter layer.
 - Multi-user or remote hosting. The API is loopback-only by design.
 - Hosted-provider lock-in. An external OpenAI-compatible endpoint is supported, but no vendor is
   hard-coded or required; the default and supported target is a local model.
@@ -297,6 +298,43 @@ at runtime and the real `dist/` in a dev checkout. The build then polls for the 
 paths until their sizes are stable, because `pkg` spawns writers that outlive the parent process;
 without that wait the build reported success before the binaries existed.
 
+### 3.14 `debug/session.ts` — Node debugger
+
+`node --inspect-brk=127.0.0.1:0` starts the script paused and prints a WebSocket URL; the session
+speaks Chrome DevTools Protocol over it: `Debugger.setBreakpointByUrl`, `Debugger.resume|pause|step*`,
+`Runtime.getProperties` for locals and `Debugger.evaluateOnCallFrame` for evaluation.
+
+The ordering is the hard part. Each rule below exists because its absence produced a frozen
+debuggee or a status that lied:
+
+1. `Runtime.runIfWaitingForDebugger`, then **wait for the entry pause** before the first
+   `Debugger.resume`; resuming while V8 is still waiting is rejected and leaves the program stopped.
+2. Set the optimistic `running` status **before** sending a resume: the next breakpoint can be hit
+   before the protocol reply arrives, and setting it afterwards overwrites a real pause.
+3. Map paused frames through `Debugger.scriptParsed`; call frames carry a `scriptId`, not a URL.
+4. Publish a pause immediately (status + frames) and fill locals a tick later behind a sequence
+   guard, so a resume landing mid-fetch cannot resurrect a stale frame.
+
+No dependency is needed: Node ≥22 exposes a global `WebSocket`, and older runtimes get a clear
+error. Under `pkg` there is no node binary to spawn, and `PKG_EXECPATH=PKG_INVOKE_NODEJS` is
+rejected by this bootstrap ("bad option: --inspect-brk"), so the session launches the debuggee with
+a real Node install instead (`GENIE_NODE` overrides it) and fails with a clear message when absent. `.js` runs directly; `.ts` relies on Node ≥23.6
+type stripping (or `--experimental-strip-types`). Paths are resolved inside the workspace, so a
+script outside it is rejected before anything is spawned.
+
+### 3.15 `intel/sources.ts` + `src/editor/intel.ts` — peek and navigation
+
+Monaco ships a complete TypeScript language service inside its worker, so navigation needs no LSP
+server. The server exposes a bounded bundle of workspace sources (`GET /api/intel/sources`); the
+editor registers each as an extra lib under `file:///workspace/<path>` and configures the TS
+defaults. Open models use the same URI and take precedence — the lib for that URI is disposed while
+the model exists and restored when it closes, which is what avoids duplicate declarations.
+
+One wiring yields go to definition, peek definition, find usages, implementations, hover quick
+info, the file outline and inline diagnostics — the peek widget included — for JS/TS. Caps
+(600 files, 3 MB, 400 KB per file, `truncated` flag) keep a large repository from turning a
+keystroke into a 200 MB download; other languages keep editing without navigation.
+
 ---
 
 ## 4. Failure matrix (self-heal contract)
@@ -350,6 +388,8 @@ model.
 | HTTP API | `http-api.test.ts` | live server: health offline, file CRUD, 400 on escape, specs, checkpoints |
 | Agent memory | `memory.test.ts` | fact dedup by key, forget, core rendering + line cap, event ordering/pruning, empty store |
 | Provider switch | `provider.test.ts` | local default, external from env, external from config.json, local-model fallback, unknown provider degrades |
+| Language service | `intel.test.ts` | source filters, ignored dirs, file/size caps, truncation |
+| Debugger | `debug.test.ts` | breakpoint pause, locals, in-frame evaluation, stepping, missing/escaping script rejection |
 
 ---
 
@@ -366,7 +406,9 @@ model.
 | MCP tool servers | ✅ | stdio client, tool namespacing |
 | Inline diff / apply on hover | ⚠️ | Patch results are shown in chat; no inline accept/reject UI |
 | Inline chat / quick edit (Cmd-K) | ❌ | Planned |
-| Code OSS editor: LSP, debugger, extensions | ❌ | Monaco only; out of scope |
+| Code OSS editor: extensions, extension marketplace | ❌ | Monaco only; out of scope |
+| Debugger (breakpoints, step, variables, evaluate) | ✅ | Node inspector via CDP; other runtimes need DAP |
+| Peek/navigation (definition, usages, hover, outline) | ✅ | Monaco TS service over the workspace; JS/TS only |
 | Autonomous "agent runs tests until green" | ⚠️ | Agent can run tests; no dedicated loop budget |
 | Model routing between providers | ✅ | `provider` switch: LM Studio or any OpenAI-compatible API |
 | Cross-run agent memory | ⚠️ | Pinned facts + run journal; no semantic recall over events |
@@ -382,3 +424,4 @@ model.
 5. Streaming checkpoint deltas instead of full snapshots for large workspaces.
 6. Sign the macOS/Windows desktop builds and publish them from CI.
 7. Semantic recall over `events.jsonl` once a local embedding endpoint is available.
+8. Debug adapters (DAP) for Python/Go and source-map support in the Node session.

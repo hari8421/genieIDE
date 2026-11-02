@@ -235,7 +235,74 @@ export const api = {
   steering: () => request<{ steering: Array<{ name: string; inclusion: string; globs: string[] }> }>('/api/steering'),
   mcp: () => request<{ servers: string[]; tools: string[] }>('/api/mcp'),
   connectMcp: () => request<{ servers: Array<{ server: string; ok: boolean; tools?: number; error?: string }> }>('/api/mcp/connect', { method: 'POST' }),
+  sources: () => request<SourceBundle>('/api/intel/sources'),
+  debugState: () => request<DebugState>('/api/debug/state'),
+  debugStart: (script: string, breakpoints: Array<{ path: string; line: number }>) =>
+    request<DebugState>('/api/debug/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ script, breakpoints }),
+    }),
+  debugSetBreakpoints: (breakpoints: Array<{ path: string; line: number }>) =>
+    request<DebugState>('/api/debug/breakpoints', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ breakpoints }),
+    }),
+  debugAction: (action: 'continue' | 'pause' | 'stepOver' | 'stepInto' | 'stepOut') =>
+    request<DebugState>('/api/debug/action', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action }),
+    }),
+  debugEvaluate: (expression: string) =>
+    request<{ value: string }>('/api/debug/evaluate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ expression }),
+    }),
+  debugStop: () => request<{ status: string }>('/api/debug/stop', { method: 'POST' }),
 };
+
+export interface SourceBundle {
+  root: string;
+  files: Array<{ path: string; content: string }>;
+  truncated: boolean;
+  bytes: number;
+}
+
+export type DebugStatus = 'idle' | 'starting' | 'paused' | 'running' | 'exited';
+
+export interface DebugBreakpoint {
+  path: string;
+  line: number;
+  verified?: boolean;
+}
+
+export interface DebugFrame {
+  id: string;
+  functionName: string;
+  path: string | null;
+  line: number;
+  column: number;
+}
+
+export interface DebugVariable {
+  name: string;
+  value: string;
+  type: string;
+}
+
+export interface DebugState {
+  status: DebugStatus;
+  script: string | null;
+  frames: DebugFrame[];
+  variables: DebugVariable[];
+  breakpoints: DebugBreakpoint[];
+  output: Array<{ stream: string; text: string }>;
+  exitCode?: number | null;
+  error?: string;
+}
 
 export type StreamHandler = (event: string, data: Record<string, unknown>) => void;
 

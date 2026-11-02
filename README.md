@@ -34,6 +34,8 @@ OpenAI-compatible endpoint.
 | Context budgeting, history compaction, retrieval | ✅ | `server/context/*` |
 | Agent memory: pinned facts + run journal | ✅ | `server/memory/*` |
 | Desktop executables (Linux, macOS, Windows) | ✅ | `scripts/build-desktop.mjs` |
+| Debugger: breakpoints, stepping, locals, evaluate | ✅ | `server/debug/session.ts`, `src/components/DebugPanel.tsx` |
+| Peek definition/usages, hover, outline, diagnostics | ✅ | `src/editor/intel.ts` (Monaco TS service) |
 | Autopilot vs supervised tool approval | ✅ | `server/agent/loop.ts` |
 | Local Monaco editor with bundled workers (works offline) | ✅ | `src/monaco-setup.ts` |
 | LSP, debugger, extension marketplace, inline ghost text | ❌ | out of scope (needs Code OSS fork) |
@@ -125,6 +127,35 @@ SSE and tool calls, so OpenAI, Groq, OpenRouter, Together, DeepSeek and self-hos
 work — you need a base URL, a model name and a key, nothing vendor-specific. `.genie/` is
 git-ignored, and `GENIE_EXTERNAL_API_KEY` keeps the key out of any file entirely.
 
+## Debugging and navigation
+
+The editor is wired to real analysis, not name matching:
+
+| Action | Shortcut | Source |
+| --- | --- | --- |
+| Go to definition | F12 | Monaco TypeScript service |
+| Peek definition | Alt+F12 | same result, in the peek widget |
+| Find usages (peek) | Shift+F12 | same |
+| Go to implementation | Ctrl/Cmd+F12 | same |
+| Quick info / hover | hover | same |
+| File outline | Ctrl/Cmd+Shift+O | same |
+| Problems | inline squiggles | same |
+
+`GET /api/intel/sources` hands the workspace's JS/TS files to Monaco's bundled TypeScript
+service, so symbols resolve across files. The bundle is capped (600 files, 3 MB total, 400 KB per
+file) and reports `truncated` when it stops early.
+
+The **Debug** tab runs a real Node debugger over the inspector protocol:
+
+- click the gutter (or press F9) to toggle a breakpoint; breakpoints survive reloads
+- Debug/Stop, continue, pause, step over / into / out
+- call stack with clickable frames, per-scope locals, console + stdout/stderr
+- evaluate any expression in the paused frame
+
+Scripts start under `node --inspect-brk`: `.js` works out of the box, `.ts` uses Node 23.6+ type
+stripping (or `--experimental-strip-types` on 22.x). The debugger is Node-only — there is no DAP
+adapter layer for Python, Go or browser targets, and source maps are not applied.
+
 ## Daily use
 
 1. **Specs tab** — create a spec, describe the feature, hit *Generate spec*. You get
@@ -161,6 +192,8 @@ server/
   context/      builder.ts (budgeting), retrieval.ts (lexical search)
   llm/          client.ts (LM Studio or any OpenAI-compatible API), retry.ts, structured.ts
   memory/       store.ts (facts.jsonl, core.md, events.jsonl)
+  intel/        sources.ts (workspace bundle for the language service)
+  debug/        session.ts (Node inspector debugger over CDP)
   tools/        sandboxed file/shell tools
   spec/         spec store + three-stage generator
   hooks/        event → action engine
@@ -170,8 +203,8 @@ server/
   http.ts       HTTP + SSE API (single router, shared by dev and desktop)
   index.ts      dev entrypoint; boots http.ts
 scripts/        dev.mjs, build-desktop.mjs
-src/            React + Monaco UI
-tests/          vitest suite (109 tests)
+src/            React + Monaco UI (src/editor/intel.ts wires the TS service)
+tests/          vitest suite (117 tests)
 docs/DESIGN.md  detailed design
 PROGRESS.md     what is done, what is not
 ```

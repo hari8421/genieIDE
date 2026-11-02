@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import ChatPanel from './components/ChatPanel';
 import EditorPane from './components/EditorPane';
 import FileTree from './components/FileTree';
+import DebugPanel from './components/DebugPanel';
 import { CheckpointsTab, HooksTab, ModelsTab, RunsTab, SpecsTab } from './components/Panels';
+import { loadWorkspaceIntel, updateIntelSource } from './editor/intel';
 import { api, stream, type Autonomy, type FileNode, type Health, type RunSummary } from './lib/api';
 import { applyEvent, emptySession, type SessionState } from './lib/session';
 
@@ -13,7 +15,7 @@ export interface OpenFile {
   language: string;
 }
 
-type Tab = 'files' | 'specs' | 'hooks' | 'checkpoints' | 'runs' | 'models';
+type Tab = 'files' | 'specs' | 'hooks' | 'checkpoints' | 'runs' | 'models' | 'debug';
 
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: 'files', label: 'Files' },
@@ -22,6 +24,7 @@ const TABS: Array<{ key: Tab; label: string }> = [
   { key: 'checkpoints', label: 'Undo' },
   { key: 'runs', label: 'Runs' },
   { key: 'models', label: 'Models' },
+  { key: 'debug', label: 'Debug' },
 ];
 
 export default function App() {
@@ -36,6 +39,16 @@ export default function App() {
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [newFile, setNewFile] = useState('');
+  const [breakpoints, setBreakpoints] = useState<Array<{ path: string; line: number }>>(() => {
+    try {
+      const raw = localStorage.getItem('genie.breakpoints');
+      const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+      return Array.isArray(parsed) ? (parsed as Array<{ path: string; line: number }>) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [reveal, setReveal] = useState<{ path: string; line: number } | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   const autonomyTouched = useRef(false);
@@ -77,6 +90,19 @@ export default function App() {
   }, [refreshHealth, refreshTree, refreshRuns]);
 
   useEffect(() => {
+    try {
+      localStorage.setItem('genie.breakpoints', JSON.stringify(breakpoints));
+    } catch {
+      // personal storage can be unavailable; breakpoints still work this session
+    }
+  }, [breakpoints]);
+
+  // Feed the workspace to Monaco's TypeScript service so peek/navigation work.
+  useEffect(() => {
+    void loadWorkspaceIntel().catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
     if (session.streaming) return;
     void refreshRuns();
     void refreshTree();
@@ -105,6 +131,7 @@ export default function App() {
     if (!active || active.content === active.saved) return;
     try {
       await api.saveFile(active.path, active.content);
+      updateIntelSource(active.path, active.content);
       setOpenFiles((prev) => prev.map((file) => (file.path === active.path ? { ...file, saved: file.content } : file)));
     } catch (err) {
       setError((err as Error).message);
@@ -220,6 +247,14 @@ export default function App() {
     }
   }, [activePath, refreshTree]);
 
+  const toggleBreakpoint = useCallback((path: string, line: number) => {
+    setBreakpoints((prev) =>
+      prev.some((breakpoint) => breakpoint.path === path && breakpoint.line === line)
+        ? prev.filter((breakpoint) => !(breakpoint.path === path && breakpoint.line === line))
+        : [...prev, { path, line }].sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line),
+    );
+  }, []);
+
   const changeModel = useCallback(
     async (model: string) => {
       try {
@@ -323,6 +358,18 @@ export default function App() {
 
           {tab === 'specs' && <SpecsTab busy={session.streaming} onRunTask={runSpecTask} onRunNext={runNextTask} />}
           {tab === 'models' && <ModelsTab health={health} onSaved={refreshHealth} />}
+          {tab === 'debug' && (
+            <DebugPanel
+              activePath={activePath}
+              breakpoints={breakpoints}
+              onToggleBreakpoint={toggleBreakpoint}
+              onClearBreakpoints={() => setBreakpoints([])}
+              onOpenFile={(path, line) => {
+                void openFile(path);
+                setReveal({ path, line });
+              }}
+            />
+          )}
           {tab === 'hooks' && <HooksTab running={session.streaming} />}
           {tab === 'checkpoints' && <CheckpointsTab onRestored={() => void refreshTree()} />}
           {tab === 'runs' && (
@@ -342,6 +389,9 @@ export default function App() {
           files={openFiles}
           activePath={activePath}
           dirtyPaths={dirtyPaths}
+          breakpoints={breakpoints}
+          reveal={reveal}
+          onToggleBreakpoint={toggleBreakpoint}
           onSelect={setActivePath}
           onClose={(path) => {
             setOpenFiles((prev) => prev.filter((file) => file.path !== path));
@@ -379,6 +429,7 @@ export default function App() {
         <span className="grow" />
         {session.streaming && <span className="running">agent running…</span>}
         <span>{health?.memory.facts ?? 0} memories</span>
+        <span>{breakpoints.length} breakpoints</span>
         <span>{health?.hooks ?? 0} hooks</span>
         <span>{health?.mcp.tools ?? 0} MCP tools</span>
       </footer>

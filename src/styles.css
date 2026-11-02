@@ -1013,3 +1013,75 @@ code {
   font-size: 14px;
   line-height: 1;
 }
+
+/* ---------- debugger ---------- */
+.genie-breakpoint {
+  background: var(--red);
+  border-radius: 50%;
+  width: 9px !important;
+  height: 9px !important;
+  margin-left: 4px;
+  box-shadow: 0 0 6px rgba(248, 113, 113, 0.6);
+}
+
+.debug-section {
+  border-top: 1px solid var(--border);
+  padding: 8px 10px;
+}
+
+.debug-title {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 10px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.debug-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.debug-badge {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.debug-badge.paused { color: var(--amber); border-color: var(--amber); }
+.debug-badge.running { color: var(--green); border-color: var(--green); }
+.debug-badge.exited { color: var(--muted); }
+
+.debug-frames,
+.debug-vars,
+.debug-output {
+  font-family: var(--mono);
+  font-size: 11px;
+  max-height: 170px;
+  overflow: auto;
+}
+
+.debug-frame,
+.debug-var,
+.breakpoint-row {
+  display: flex;
+  gap: 6px;
+  padding: 2px 0;
+  justify-content: space-between;
+}
+
+.debug-frame.active .link { color: var(--accent); }
+.debug-var { justify-content: flex-start; }
+.debug-var-name { color: var(--teal); }
+.debug-var-type { color: var(--muted); }
+.debug-output-line.stderr,
+.debug-output-line.error,
+.debug-error { color: var(--red); }
+.debug-output-line.console { color: var(--muted); }
+.debug-eval { font-family: var(--mono); font-size: 11px; color: var(--teal); margin-top: 4px; }
+.debug-error { font-size: 11px; margin: 4px 0; }

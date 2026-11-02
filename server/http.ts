@@ -2,6 +2,8 @@ import fs from 'node:fs/promises';
 import http from 'node:http';
 import path from 'node:path';
 import { loadConfig } from './config';
+import { DebugSession, type DebugAction } from './debug/session';
+import { collectSources } from './intel/sources';
 import { createService, type GenieService } from './service';
 import { loadSteering } from './steering/steering';
 import { PathEscapeError, isIgnoredPath, resolveInWorkspace, toRelative } from './util/paths';
@@ -164,6 +166,94 @@ function registerRoutes(): void {
   route('DELETE', '/api/memory/facts/:key', async ({ res, params }) => {
     const removed = await service.forgetFact(params.key ?? '');
     json(res, removed ? 200 : 404, { removed });
+  });
+
+  route('GET', '/api/intel/sources', async ({ res }) => {
+    json(res, 200, await collectSources(WORKSPACE));
+  });
+
+  route('GET', '/api/debug/state', async ({ res }) => {
+    json(
+      res,
+      200,
+      debugSession
+        ? debugSession.snapshot()
+        : { status: 'idle', script: null, frames: [], variables: [], breakpoints: [], output: [] },
+    );
+  });
+
+  route('POST', '/api/debug/start', async ({ req, res }) => {
+    const body = await readJson(req);
+    const script = text(body.script).trim();
+    if (!script) {
+      json(res, 400, { error: 'script is required' });
+      return;
+    }
+    await stopDebugSession();
+    const session = new DebugSession(WORKSPACE);
+    try {
+      await session.start({
+        script,
+        breakpoints: parseBreakpoints(body.breakpoints),
+        stopOnEntry: body.stopOnEntry !== false,
+      });
+      debugSession = session;
+      json(res, 200, session.snapshot());
+    } catch (error) {
+      await session.stop().catch(() => undefined);
+      json(res, 400, { error: (error as Error).message });
+    }
+  });
+
+  route('POST', '/api/debug/breakpoints', async ({ req, res }) => {
+    if (!debugSession) {
+      json(res, 400, { error: 'no debug session is running' });
+      return;
+    }
+    const body = await readJson(req);
+    json(res, 200, await debugSession.setBreakpoints(parseBreakpoints(body.breakpoints)));
+  });
+
+  route('POST', '/api/debug/action', async ({ req, res }) => {
+    if (!debugSession) {
+      json(res, 400, { error: 'no debug session is running' });
+      return;
+    }
+    const body = await readJson(req);
+    const action = text(body.action);
+    const allowed: DebugAction[] = ['continue', 'pause', 'stepOver', 'stepInto', 'stepOut'];
+    if (!allowed.includes(action as DebugAction)) {
+      json(res, 400, { error: `action must be one of ${allowed.join(', ')}` });
+      return;
+    }
+    try {
+      json(res, 200, await debugSession.action(action as DebugAction));
+    } catch (error) {
+      json(res, 400, { error: (error as Error).message });
+    }
+  });
+
+  route('POST', '/api/debug/evaluate', async ({ req, res }) => {
+    if (!debugSession) {
+      json(res, 400, { error: 'no debug session is running' });
+      return;
+    }
+    const body = await readJson(req);
+    const expression = text(body.expression).trim();
+    if (!expression) {
+      json(res, 400, { error: 'expression is required' });
+      return;
+    }
+    try {
+      json(res, 200, await debugSession.evaluate(expression));
+    } catch (error) {
+      json(res, 400, { error: (error as Error).message });
+    }
+  });
+
+  route('POST', '/api/debug/stop', async ({ res }) => {
+    await stopDebugSession();
+    json(res, 200, { status: 'exited' });
   });
 
   route('GET', '/api/models', async ({ res }) => {
@@ -520,6 +610,22 @@ const WORKSPACE = path.resolve(process.env.GENIE_WORKSPACE ?? process.env.GENIE_
 const EMBEDDED_DIST = process.env.GENIE_EMBEDDED_DIST ?? path.join(process.cwd(), 'dist');
 
 let service: GenieService;
+let debugSession: DebugSession | null = null;
+
+function parseBreakpoints(value: unknown): Array<{ path: string; line: number }> {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const item = entry as { path?: unknown; line?: unknown };
+    if (typeof item?.path !== 'string' || typeof item.line !== 'number' || !Number.isFinite(item.line)) return [];
+    return [{ path: item.path, line: Math.max(1, Math.round(item.line)) }];
+  });
+}
+
+async function stopDebugSession(): Promise<void> {
+  const session = debugSession;
+  debugSession = null;
+  if (session) await session.stop().catch(() => undefined);
+}
 
 async function serveStatic(res: http.ServerResponse, pathname: string, dist: string): Promise<boolean> {
   const relative = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
@@ -596,6 +702,7 @@ export async function createServer({ workspace, embeddedDist }: ServerOptions): 
 
 export async function finishShutdown(): Promise<void> {
   console.log('[genie] shutting down');
+  await stopDebugSession();
   await service.closeMcp().catch(() => undefined);
   if (service instanceof Object && 'close' in service) {
     // no-op: the service object itself does not own the server socket

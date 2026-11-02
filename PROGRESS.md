@@ -10,7 +10,7 @@ Stage: **M2 — local-first agentic IDE with desktop executables, pluggable prov
 
 | Gate | Command | Result |
 | --- | --- | --- |
-| Unit + integration tests | `npm test` | **13 files, 109 tests passing** |
+| Unit + integration tests | `npm test` | **15 files, 117 tests passing** |
 | Type safety | `npm run typecheck` (`tsc --noEmit`) | passing |
 | Production bundle | `npm run build` (typecheck + `vite build`) | passing |
 | Desktop executables | `node scripts/build-desktop.mjs` | **exit 0**, three binaries (Linux 78 MB, macOS arm64 70 MB, Windows 97 MB) |
@@ -18,6 +18,8 @@ Stage: **M2 — local-first agentic IDE with desktop executables, pluggable prov
 | Packaged binary smoke test | `pkg-out/genie/genie-ide-linux-x64` → `/api/health`, `/api/memory`, `/` | passing (real HTTP responses served from the binary) |
 | Memory across restarts | restart the binary on the same workspace | passing — `core.md` rebuilt from `facts.jsonl`, facts and event count intact |
 | Provider + memory regression | `tests/provider-memory.e2e.test.ts` (in `npm test`) | the throwaway driver is now a committed test: stub provider, bearer key, real prompt asserts |
+| Debugger (real inspector) | `tests/debug.test.ts` | breakpoint pause, locals, in-frame evaluation and stepping against a live `node --inspect-brk` child |
+| Language service | `tests/intel.test.ts` | source bundle filters, size caps, truncation flag |
 | HTTP smoke test | bundled server + `/api/health`, `/api/files` | passing |
 | Real LM Studio end-to-end | requires a local model | **not verified here** — no model server exists in the cloud runner |
 | macOS / Windows binaries executed | requires those hosts | **not verified** — format-checked (Mach-O arm64, PE32+ x86-64) but only the Linux ELF was run |
@@ -65,6 +67,25 @@ overflow, cancellation and resume paths.
       opener warns instead of failing the start
 - [x] Build reports a non-zero exit when pkg fails or produces nothing, and waits for pkg's
       outliving writers before scanning for outputs
+
+### Debugger
+- [x] Real Node debugging over the inspector protocol (CDP over WebSocket, no dependency)
+- [x] Breakpoints with verification state, persisted in the editor gutter (F9)
+- [x] Continue / pause / step over / step into / step out
+- [x] Call stack with clickable frames; locals grouped per scope
+- [x] Evaluate expressions in the paused frame
+- [x] Console, stdout and stderr streamed into the panel
+- [x] Refuses scripts outside the workspace; reports missing ones instead of hanging
+- [x] Debugs from the packaged desktop binary when Node.js is installed (`GENIE_NODE` overrides the
+      interpreter)
+
+### Language intelligence (peek / navigation)
+- [x] Workspace source bundle served to the editor (`GET /api/intel/sources`), capped and
+      truncation-aware
+- [x] Monaco TypeScript service fed as extra libs on `file:///workspace/...` URIs
+- [x] Go to definition, peek definition, find usages, implementations, hover, outline
+- [x] Inline diagnostics from the same service
+- [x] Open models take precedence over libs; saved files are re-registered
 
 ### Agent loop
 - [x] Multi-step tool loop with a real step budget
@@ -156,6 +177,11 @@ overflow, cancellation and resume paths.
    concurrent processes, and no semantic search over facts — the core file is a small pinned list
    by design.
 
+7. The debugger is Node-only and applies no source maps; a script that finishes while the debugger is
+   still attached stays `running` until Stop, because Node keeps the debuggee alive.
+8. Peek and navigation are JS/TS only: other languages keep editing and highlighting but have no
+   semantic navigation, since there is no LSP client.
+
 ---
 
 ## 5. Next actions
@@ -167,3 +193,5 @@ overflow, cancellation and resume paths.
 4. Add token/wall-clock run budgets with a continue gate.
 5. Convert checkpoints to content-addressed blobs to cut disk use in large repos.
 6. Sign macOS/Windows desktop builds and add a release workflow that uploads the three binaries.
+7. Route the debugger through DAP adapters (Python, Go) and apply source maps.
+8. Add an LSP client for non-TS languages so peek works everywhere.
