@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Autonomy, Health } from '../lib/api';
 import type { SessionState } from '../lib/session';
 
@@ -26,8 +26,15 @@ export default function ChatPanel({
   onRemoveFile,
 }: ChatPanelProps) {
   const [goal, setGoal] = useState('');
+  const transcriptRef = useRef<HTMLDivElement>(null);
   const offline = Boolean(health && !health.lmStudio.ok);
   const busy = session.streaming;
+
+  // An agent transcript is a log: keep the newest step in view as it arrives.
+  useEffect(() => {
+    const node = transcriptRef.current;
+    if (node) node.scrollTop = node.scrollHeight;
+  }, [session.entries, session.result]);
 
   const submit = () => {
     const trimmed = goal.trim();
@@ -60,7 +67,7 @@ export default function ChatPanel({
         </div>
       )}
 
-      <div className="transcript">
+      <div className="transcript" ref={transcriptRef}>
         {session.entries.length === 0 && (
           <div className="empty">
             Describe what to build or fix. The agent plans, edits files with patches, runs commands and verifies.

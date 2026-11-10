@@ -39,8 +39,18 @@ const preview = (value: unknown, max = 1800): string => {
   return text.length > max ? `${text.slice(0, max)}\n…` : text;
 };
 
-/** Fold one SSE event into the session transcript. */
+/**
+ * Fold one SSE event into the session transcript.
+ *
+ * The server sends `{ type, runId, step, data }`; \`result\` and \`error\` carry their
+ * fields at the top level. Unwrapping once here keeps every case below reading
+ * the same shape, so a payload change cannot silently blank the transcript.
+ */
 export function applyEvent(state: SessionState, event: string, data: Record<string, unknown>): SessionState {
+  const payload =
+    data.data && typeof data.data === 'object' && !Array.isArray(data.data)
+      ? (data.data as Record<string, unknown>)
+      : data;
   switch (event) {
     case 'accepted':
       return { ...state, streaming: true, error: null, runId: null };
@@ -51,7 +61,7 @@ export function applyEvent(state: SessionState, event: string, data: Record<stri
     case 'step.start':
       return withEntry(state, { kind: 'notice', step: Number(data.step ?? 0), text: `Step ${Number(data.step ?? 0) + 1}`, status: 'running' });
     case 'assistant.delta': {
-      const text = String(data.text ?? '');
+      const text = String(payload.text ?? '');
       const entries = [...state.entries];
       const last = entries[entries.length - 1];
       if (last && last.kind === 'assistant' && last.status === 'running') {
@@ -62,32 +72,33 @@ export function applyEvent(state: SessionState, event: string, data: Record<stri
       return { ...state, entries };
     }
     case 'assistant.message': {
-      const text = String(data.content ?? '');
+      const text = String(payload.content ?? '');
       if (!text) return state;
+      const settled = payload.final === true;
       const entries = [...state.entries];
       const last = entries[entries.length - 1];
       if (last && last.kind === 'assistant') {
-        entries[entries.length - 1] = { ...last, text, status: data.final ? 'ok' : 'running' };
+        entries[entries.length - 1] = { ...last, text, status: settled ? 'ok' : 'running' };
         return { ...state, entries };
       }
-      return withEntry(state, { kind: 'assistant', text, status: data.final ? 'ok' : 'running' });
+      return withEntry(state, { kind: 'assistant', text, status: settled ? 'ok' : 'running' });
     }
     case 'tool.call':
       return withEntry(state, {
         kind: 'tool',
-        name: String(data.name ?? 'tool'),
-        args: preview(data.args, 600),
+        name: String(payload.name ?? 'tool'),
+        args: preview(payload.args, 600),
         text: '',
         status: 'running',
         step: typeof data.step === 'number' ? data.step : undefined,
       });
     case 'tool.result':
     case 'tool.error': {
-      const name = String(data.name ?? '');
-      const content = String(data.content ?? data.message ?? '');
-      if (!name && content && typeof data.type === 'string') {
+      const name = String(payload.name ?? '');
+      const content = String(payload.content ?? payload.message ?? '');
+      if (!name && !content && typeof payload.type === 'string') {
         // tool-emitted progress events (e.g. file.written)
-        return withEntry(state, { kind: 'notice', text: `${String(data.type)} ${String(data.path ?? '')}`.trim(), status: 'ok' });
+        return withEntry(state, { kind: 'notice', text: `${String(payload.type)} ${String(payload.path ?? '')}`.trim(), status: 'ok' });
       }
       const entries = [...state.entries];
       for (let i = entries.length - 1; i >= 0; i -= 1) {
@@ -105,11 +116,11 @@ export function applyEvent(state: SessionState, event: string, data: Record<stri
       });
     }
     case 'checkpoint':
-      return withEntry(state, { kind: 'notice', text: `Checkpoint saved: ${String(data.label ?? data.id ?? '')}`, status: 'ok' });
+      return withEntry(state, { kind: 'notice', text: `Checkpoint saved: ${String(payload.label ?? payload.id ?? '')}`, status: 'ok' });
     case 'heal':
       return withEntry(state, {
         kind: 'notice',
-        text: `Self-heal: ${String(data.detail ?? data.kind ?? 'retrying')}`,
+        text: `Self-heal: ${String(payload.detail ?? payload.kind ?? 'retrying')}`,
         status: 'running',
       });
     case 'retry':
@@ -118,10 +129,10 @@ export function applyEvent(state: SessionState, event: string, data: Record<stri
       return {
         ...state,
         context: {
-          tokens: Number(data.totalTokens ?? 0),
-          budget: Number(data.budgetTokens ?? 0),
-          dropped: Array.isArray(data.dropped) ? data.dropped.length : 0,
-          truncated: Array.isArray(data.truncated) ? data.truncated.length : 0,
+          tokens: Number(payload.totalTokens ?? 0),
+          budget: Number(payload.budgetTokens ?? 0),
+          dropped: Array.isArray(payload.dropped) ? payload.dropped.length : 0,
+          truncated: Array.isArray(payload.truncated) ? payload.truncated.length : 0,
         },
       };
     case 'result': {

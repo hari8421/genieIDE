@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ChatPanel from './components/ChatPanel';
 import EditorPane from './components/EditorPane';
 import FileTree from './components/FileTree';
 import DebugPanel from './components/DebugPanel';
+import QuickOpen from './components/QuickOpen';
 import { CheckpointsTab, HooksTab, ModelsTab, RunsTab, SpecsTab } from './components/Panels';
 import { loadWorkspaceIntel, updateIntelSource } from './editor/intel';
 import { api, stream, type Autonomy, type FileNode, type Health, type RunSummary } from './lib/api';
@@ -16,6 +17,14 @@ export interface OpenFile {
 }
 
 type Tab = 'files' | 'specs' | 'hooks' | 'checkpoints' | 'runs' | 'models' | 'debug';
+
+function flattenFiles(nodes: FileNode[], into: string[] = []): string[] {
+  for (const node of nodes) {
+    if (node.type === 'file') into.push(node.path);
+    else if (node.children?.length) flattenFiles(node.children, into);
+  }
+  return into;
+}
 
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: 'files', label: 'Files' },
@@ -49,6 +58,7 @@ export default function App() {
     }
   });
   const [reveal, setReveal] = useState<{ path: string; line: number } | null>(null);
+  const [quickOpen, setQuickOpen] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const autonomyTouched = useRef(false);
@@ -140,9 +150,13 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+      const modifier = event.metaKey || event.ctrlKey;
+      if (modifier && event.key.toLowerCase() === 's') {
         event.preventDefault();
         void saveActive();
+      } else if (modifier && event.key.toLowerCase() === 'p') {
+        event.preventDefault();
+        setQuickOpen(true);
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -247,6 +261,19 @@ export default function App() {
     }
   }, [activePath, refreshTree]);
 
+  const closeFile = useCallback(
+    (path: string) => {
+      const file = openFiles.find((entry) => entry.path === path);
+      if (file && file.content !== file.saved) {
+        // eslint-disable-next-line no-alert
+        if (!window.confirm(`Discard unsaved changes in ${path}?`)) return;
+      }
+      setOpenFiles((prev) => prev.filter((entry) => entry.path !== path));
+      setActivePath((current) => (current === path ? null : current));
+    },
+    [openFiles],
+  );
+
   const toggleBreakpoint = useCallback((path: string, line: number) => {
     setBreakpoints((prev) =>
       prev.some((breakpoint) => breakpoint.path === path && breakpoint.line === line)
@@ -276,6 +303,7 @@ export default function App() {
     [],
   );
 
+  const workspaceFiles = useMemo(() => flattenFiles(tree), [tree]);
   const dirtyPaths = openFiles.filter((file) => file.content !== file.saved).map((file) => file.path);
   const context = session.context;
   const models = health?.lmStudio.models ?? [];
@@ -393,10 +421,7 @@ export default function App() {
           reveal={reveal}
           onToggleBreakpoint={toggleBreakpoint}
           onSelect={setActivePath}
-          onClose={(path) => {
-            setOpenFiles((prev) => prev.filter((file) => file.path !== path));
-            if (activePath === path) setActivePath(null);
-          }}
+          onClose={closeFile}
           onChange={(path, content) =>
             setOpenFiles((prev) => prev.map((file) => (file.path === path ? { ...file, content } : file)))
           }
@@ -433,6 +458,17 @@ export default function App() {
         <span>{health?.hooks ?? 0} hooks</span>
         <span>{health?.mcp.tools ?? 0} MCP tools</span>
       </footer>
+
+      {quickOpen && (
+        <QuickOpen
+          files={workspaceFiles}
+          onClose={() => setQuickOpen(false)}
+          onPick={(path) => {
+            setQuickOpen(false);
+            void openFile(path);
+          }}
+        />
+      )}
 
       {error && (
         <div className="toast" role="alert">

@@ -61,7 +61,7 @@ run(
     GENIE_PORT: apiPort,
     GENIE_WEB_PORT: webPort,
     // Exact preview hostname only; never a blanket domain allowlist.
-    ...(process.env.GENIE_PREVIEW_HOST ? { __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: process.env.GENIE_PREVIEW_HOST } : {}),
+    ...(process.env.GENIE_PREVIEW_HOST ? { GENIE_ALLOWED_HOSTS: process.env.GENIE_PREVIEW_HOST } : {}),
   },
   35,
 );

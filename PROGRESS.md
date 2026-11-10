@@ -1,6 +1,6 @@
 # genie — Progress
 
-Last updated: 2026-11-02
+Last updated: 2026-11-10
 Branch: `main`
 Stage: **M2 — local-first agentic IDE with desktop executables, pluggable providers and cross-run agent memory.**
 
@@ -10,7 +10,7 @@ Stage: **M2 — local-first agentic IDE with desktop executables, pluggable prov
 
 | Gate | Command | Result |
 | --- | --- | --- |
-| Unit + integration tests | `npm test` | **15 files, 117 tests passing** |
+| Unit + integration tests | `npm test` | **16 files, 122 tests passing** (5 new: SSE transcript reducer) |
 | Type safety | `npm run typecheck` (`tsc --noEmit`) | passing |
 | Production bundle | `npm run build` (typecheck + `vite build`) | passing |
 | Desktop executables | `node scripts/build-desktop.mjs` | **exit 0**, three binaries (Linux 78 MB, macOS arm64 70 MB, Windows 97 MB) |
@@ -20,6 +20,9 @@ Stage: **M2 — local-first agentic IDE with desktop executables, pluggable prov
 | Provider + memory regression | `tests/provider-memory.e2e.test.ts` (in `npm test`) | the throwaway driver is now a committed test: stub provider, bearer key, real prompt asserts |
 | Debugger (real inspector) | `tests/debug.test.ts` | breakpoint pause, locals, in-frame evaluation and stepping against a live `node --inspect-brk` child |
 | Language service | `tests/intel.test.ts` | source bundle filters, size caps, truncation flag |
+| Transcript reducer | `tests/session.test.ts` | wrapped `{type, step, data}` events, delta streaming, tool pairing, unwrapped `result`/`error` |
+| UI in a browser | headless Chromium against `npm run dev` | quick open, file open, agent run, spec panel, runs, undo, models, plus per-tab undo history and the unsaved-close guard — screenshots in `docs/images/` (stub OpenAI-compatible endpoint, not LM Studio) |
+| Preview host | `curl -H 'Host: <preview>'` | **403 → 200** after `GENIE_ALLOWED_HOSTS` wiring (Vite 5 ignores `__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS`) |
 | HTTP smoke test | bundled server + `/api/health`, `/api/files` | passing |
 | Real LM Studio end-to-end | requires a local model | **not verified here** — no model server exists in the cloud runner |
 | macOS / Windows binaries executed | requires those hosts | **not verified** — format-checked (Mach-O arm64, PE32+ x86-64) but only the Linux ELF was run |
@@ -136,6 +139,12 @@ overflow, cancellation and resume paths.
       panel, undo/checkpoint panel, runs panel, models + memory panel, status bar
 - [x] Live "LM Studio offline" guidance instead of a dead run button
 - [x] Context meter and self-heal notices surfaced in the transcript
+- [x] Quick open (`Ctrl/Cmd+P`) over the whole workspace with fuzzy scoring and keyboard navigation
+- [x] One Monaco model per path: undo history, cursor and scroll survive tab switches
+- [x] Closing a tab with unsaved changes asks before discarding them
+- [x] Transcript reducer unwraps the SSE `{ type, step, data }` envelope, so tool names, arguments,
+      assistant text and the context meter render instead of blank entries
+- [x] Sidebar tab strip wraps instead of clipping tabs on narrow windows
 
 ### Documentation / examples
 - [x] `README.md` (setup, desktop build, providers, memory, feature map, safety)
@@ -166,8 +175,9 @@ overflow, cancellation and resume paths.
    not exact; the context-overflow healing path is the safety net.
 3. Checkpoints snapshot whole files (1 MB/file, 40 MB total). Very large workspaces will see some
    files skipped, and snapshots are not incremental.
-4. Browser interaction (clicks, editor typing) was not exercised here; the API and bundle are
-   verified, the visuals are not.
+4. Browser interaction was exercised in headless Chromium for the documented flows (quick open,
+   file open, an agent run, specs, runs, undo, models), but not against a live LM Studio server:
+   the screenshots and the run transcript come from a stub OpenAI-compatible endpoint.
 5. `run_command` runs allow-listed commands with your shell privileges. The deny-list is a
    guardrail, not a sandbox.
 6. Only the Linux desktop binary was executed. The macOS binary is produced on Linux and is
@@ -195,3 +205,5 @@ overflow, cancellation and resume paths.
 6. Sign macOS/Windows desktop builds and add a release workflow that uploads the three binaries.
 7. Route the debugger through DAP adapters (Python, Go) and apply source maps.
 8. Add an LSP client for non-TS languages so peek works everywhere.
+9. Add a CI workflow that runs `npm test`, `npm run typecheck` and `npm run build` on every pull
+   request, so the gates in `docs/contributing/pull-requests.md` are enforced rather than trusted.

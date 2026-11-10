@@ -262,6 +262,7 @@ code {
 /* ---------- sidebar tabs ---------- */
 .tabs-nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
   padding: 8px 8px 0;
   border-bottom: 1px solid var(--border);
@@ -1012,6 +1013,102 @@ code {
   cursor: pointer;
   font-size: 14px;
   line-height: 1;
+}
+
+/* ---------- quick open ---------- */
+.quickopen-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 6, 10, 0.55);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 12vh;
+  z-index: 60;
+  backdrop-filter: blur(2px);
+}
+
+.quickopen {
+  width: min(640px, 90vw);
+  background: var(--panel);
+  border: 1px solid #2b3446;
+  border-radius: 10px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.quickopen-input {
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  padding: 12px 14px;
+  font-size: 13px;
+  outline: none;
+}
+
+.quickopen-input::placeholder {
+  color: var(--muted);
+}
+
+.quickopen-list {
+  max-height: 360px;
+  overflow: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.quickopen-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  padding: 6px 8px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.quickopen-item.active {
+  background: var(--accent-soft);
+}
+
+.quickopen-name {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quickopen-dir {
+  font-size: 10.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: none;
+  max-width: 55%;
+}
+
+.quickopen-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.quickopen-foot .grow {
+  flex: 1;
 }
 
 /* ---------- debugger ---------- */

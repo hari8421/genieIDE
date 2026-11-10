@@ -133,7 +133,8 @@ export default function EditorPane({
       <div className="editor-body">
         {active ? (
           <Editor
-            key={active.path}
+            /* No key on purpose: Monaco keeps one model and view state per path,
+               so switching tabs preserves undo history, cursor and scroll. */
             path={`${WORKSPACE_URI}/${active.path}`}
             language={active.language}
             theme="genie-dark"
@@ -161,7 +162,7 @@ export default function EditorPane({
             <h2>genie</h2>
             <p>A spec-driven agentic IDE running against your own LM Studio models.</p>
             <ul>
-              <li>Open a file on the left, or create one.</li>
+              <li>Ctrl/Cmd+P jumps to any file; open one on the left or create one.</li>
               <li>Describe a goal in the chat and let the agent work.</li>
               <li>Every write is checkpointed; every step is journaled and resumable.</li>
               <li>F12 / Alt+F12 / Shift+F12 peek definitions and usages; F9 sets a breakpoint.</li>
