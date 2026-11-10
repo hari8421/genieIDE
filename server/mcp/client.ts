@@ -31,7 +31,7 @@ export class McpError extends Error {
 
 /**
  * Minimal MCP client over stdio (newline-delimited JSON-RPC 2.0).
- * Enough for the tool subset genie needs: initialize, tools/list, tools/call.
+ * Enough for the tool subset anneal needs: initialize, tools/list, tools/call.
  */
 export class McpClient {
   private child?: ChildProcessWithoutNullStreams;
@@ -81,7 +81,7 @@ export class McpClient {
     const result = (await this.request('initialize', {
       protocolVersion: '2024-11-05',
       capabilities: { tools: {} },
-      clientInfo: { name: 'genie-ide', version: '0.1.0' },
+      clientInfo: { name: 'anneal-ide', version: '0.1.0' },
     }, timeoutMs)) as { protocolVersion?: string; serverInfo?: unknown };
 
     this.notify('notifications/initialized', {});

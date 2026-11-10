@@ -248,7 +248,7 @@ export function HooksTab({ running }: { running: boolean }) {
   return (
     <div className="panel-body">
       <div className="hint">
-        Hooks live in <code>.genie/hooks/*.json</code> and fire on file and task events.
+        Hooks live in <code>.anneal/hooks/*.json</code> and fire on file and task events.
       </div>
       {hooks.map((hook) => (
         <div key={hook.name} className="hook">
@@ -581,8 +581,8 @@ export function ModelsTab({ health, onSaved }: { health: Health | null; onSaved:
             />
           </div>
           <div className="hint tiny">
-            Stored in <code>.genie/config.json</code> on this machine only (that folder is git-ignored). You can also set{' '}
-            <code>GENIE_EXTERNAL_API_KEY</code>.
+            Stored in <code>.anneal/config.json</code> on this machine only (that folder is git-ignored). You can also set{' '}
+            <code>ANNEAL_EXTERNAL_API_KEY</code>.
           </div>
         </>
       )}

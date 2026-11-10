@@ -94,7 +94,7 @@ export function extractTitle(markdown: string, fallback: string): string {
   return match?.[1]?.trim() || fallback;
 }
 
-/** Spec storage: `.genie/specs/<id>/{requirements,design,tasks}.md`. */
+/** Spec storage: `.anneal/specs/<id>/{requirements,design,tasks}.md`. */
 export class SpecStore {
   constructor(private readonly specsDir: string) {}
 

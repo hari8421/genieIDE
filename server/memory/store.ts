@@ -17,7 +17,7 @@ export interface RememberInput {
 /**
  * File-backed agent memory.
  *
- * Three files under `.genie/memory/`:
+ * Three files under `.anneal/memory/`:
  *  - `facts.jsonl`  durable key/value facts, deduplicated by key
  *  - `core.md`      the pinned working set rendered from the facts; this is what
  *                   gets injected into the agent prompt, so it stays small

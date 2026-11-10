@@ -27,9 +27,9 @@ answers; the model dropdown is populated from `GET /models` on that endpoint.
 Useful overrides while developing:
 
 ```bash
-GENIE_PORT=9000 npm run dev        # move the API
-GENIE_WEB_PORT=4000 npm run dev    # move the UI
-GENIE_WORKSPACE=/path/to/repo npm run dev   # point the agent at another folder
+ANNEAL_PORT=9000 npm run dev        # move the API
+ANNEAL_WEB_PORT=4000 npm run dev    # move the UI
+ANNEAL_WORKSPACE=/path/to/repo npm run dev   # point the agent at another folder
 ```
 
 ### Production mode
@@ -42,8 +42,8 @@ npm start       # one process serves the API and dist/ on :8787
 ### Desktop executables
 
 ```bash
-npm run build-desktop            # pkg binaries in pkg-out/genie/
-GENIE_DESKTOP_TARGETS=node24-linux-x64 npm run build-desktop   # one target only
+npm run build-desktop            # pkg binaries in pkg-out/anneal/
+ANNEAL_DESKTOP_TARGETS=node24-linux-x64 npm run build-desktop   # one target only
 ```
 
 ## Working without a model
@@ -51,16 +51,16 @@ GENIE_DESKTOP_TARGETS=node24-linux-x64 npm run build-desktop   # one target only
 Most UI work needs *a* model endpoint, not a good one. Any OpenAI-compatible server works:
 
 ```bash
-GENIE_PROVIDER=external \
-GENIE_EXTERNAL_BASE_URL=https://api.openai.com/v1 \
-GENIE_EXTERNAL_MODEL=gpt-4o-mini \
-GENIE_EXTERNAL_API_KEY=sk-… \
+ANNEAL_PROVIDER=external \
+ANNEAL_EXTERNAL_BASE_URL=https://api.openai.com/v1 \
+ANNEAL_EXTERNAL_MODEL=gpt-4o-mini \
+ANNEAL_EXTERNAL_API_KEY=sk-… \
 npm run dev
 ```
 
 `tests/provider-memory.e2e.test.ts` contains a ~60-line stub server that streams text and tool
 calls; copy it into a scratch file when you need an offline endpoint. Keep keys in the environment
-(`GENIE_EXTERNAL_API_KEY`) or in the git-ignored `.genie/config.json`, never in a tracked file.
+(`ANNEAL_EXTERNAL_API_KEY`) or in the git-ignored `.anneal/config.json`, never in a tracked file.
 
 ## Where things live
 
@@ -83,7 +83,7 @@ src/
 tests/           vitest suite
 ```
 
-Data written at runtime lives under `.genie/` in the workspace and is git-ignored:
+Data written at runtime lives under `.anneal/` in the workspace and is git-ignored:
 `config.json`, `specs/`, `runs/<id>/journal.jsonl`, `checkpoints/`, `hooks/`, `steering/`,
 `memory/`.
 
@@ -135,9 +135,9 @@ server test.
 
 | Symptom | Cause / fix |
 | --- | --- |
-| `EADDRINUSE` on 8787 / 5173 | another dev server is running: stop it, or set `GENIE_PORT` / `GENIE_WEB_PORT` |
+| `EADDRINUSE` on 8787 / 5173 | another dev server is running: stop it, or set `ANNEAL_PORT` / `ANNEAL_WEB_PORT` |
 | UI shows “LM Studio offline” | nothing is answering at the configured base URL; start LM Studio or switch provider in the **Models** tab |
 | Model listed but runs fail | the loaded model does not support tool calls; pick a tool-calling model |
-| Vite rejects a tunnel/preview host with `Blocked request` | start the dev script with `GENIE_PREVIEW_HOST=your.host`; it is passed to Vite as `server.allowedHosts` |
+| Vite rejects a tunnel/preview host with `Blocked request` | start the dev script with `ANNEAL_PREVIEW_HOST=your.host`; it is passed to Vite as `server.allowedHosts` |
 | `tests/http-api.test.ts` expects health to be offline | something is running on `127.0.0.1:1234`; stop it before running the suite |
 | Debugger never leaves `running` | the debuggee finished but Node keeps it alive; press Stop |

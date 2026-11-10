@@ -44,7 +44,7 @@ function newCheckpointId(now = new Date()): string {
 }
 
 /**
- * Snapshot/restore of workspace files, stored under .genie/checkpoints.
+ * Snapshot/restore of workspace files, stored under .anneal/checkpoints.
  *
  * Deliberately not git-based: checkpoints must work in a workspace that is not a
  * repository, must never touch the user's index or stash, and must be cheap to
@@ -54,7 +54,7 @@ export class CheckpointStore {
   readonly dir: string;
 
   constructor(private readonly workspaceRoot: string, checkpointsDir?: string) {
-    this.dir = checkpointsDir ?? path.join(workspaceRoot, '.genie', 'checkpoints');
+    this.dir = checkpointsDir ?? path.join(workspaceRoot, '.anneal', 'checkpoints');
   }
 
   private async collectFiles(): Promise<string[]> {

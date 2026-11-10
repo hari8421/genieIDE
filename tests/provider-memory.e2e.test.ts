@@ -9,7 +9,7 @@ import { tempDir, writeFiles } from './helpers';
 /**
  * End-to-end coverage for the two features that only exist at the wire level:
  * the external provider switch and agent memory. A stub OpenAI-compatible server
- * records exactly what genie sends, so "the fact reaches the prompt" is asserted
+ * records exactly what anneal sends, so "the fact reaches the prompt" is asserted
  * against a real request body instead of an in-process mock.
  */
 
@@ -136,7 +136,7 @@ const promptText = (entry: Recorded): string => entry.messages.map((message) => 
 
 beforeAll(async () => {
   const stubPort = await startStub();
-  workspace = await tempDir('genie-provider-');
+  workspace = await tempDir('anneal-provider-');
   await writeFiles(workspace, { 'src/app.ts': 'export const app = 1;\n' });
 
   const port = 18_600 + Math.floor(Math.random() * 300);
@@ -145,15 +145,15 @@ beforeAll(async () => {
     cwd: projectRoot,
     env: {
       ...process.env,
-      GENIE_WORKSPACE: workspace,
-      GENIE_PORT: String(port),
-      GENIE_HOST: '127.0.0.1',
-      GENIE_MODEL: 'stub-model',
-      GENIE_PROVIDER: 'external',
-      GENIE_EXTERNAL_BASE_URL: `http://127.0.0.1:${stubPort}/v1`,
-      GENIE_EXTERNAL_MODEL: 'stub-model',
-      GENIE_EXTERNAL_API_KEY: API_KEY,
-      GENIE_NO_OPEN: '1',
+      ANNEAL_WORKSPACE: workspace,
+      ANNEAL_PORT: String(port),
+      ANNEAL_HOST: '127.0.0.1',
+      ANNEAL_MODEL: 'stub-model',
+      ANNEAL_PROVIDER: 'external',
+      ANNEAL_EXTERNAL_BASE_URL: `http://127.0.0.1:${stubPort}/v1`,
+      ANNEAL_EXTERNAL_MODEL: 'stub-model',
+      ANNEAL_EXTERNAL_API_KEY: API_KEY,
+      ANNEAL_NO_OPEN: '1',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

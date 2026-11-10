@@ -58,7 +58,7 @@ reducer and add a regression test for both shapes.
 Rules of thumb:
 
 - Imperative subject line, no trailing period, ideally under 72 characters.
-- Do not commit `.genie/`, `dist/`, `pkg-out/`, logs, API keys or `node_modules`.
+- Do not commit `.anneal/`, `dist/`, `pkg-out/`, logs, API keys or `node_modules`.
 - Rebase onto `main` rather than merging it into your branch: `git fetch upstream && git rebase upstream/main`.
 
 ## 4. Open the pull request
@@ -92,7 +92,7 @@ Keep the title in the same style as a commit subject; it becomes the merge commi
 | --- | --- |
 | Correctness | the bug the PR claims to fix is actually reproducible before, and gone after |
 | Tests | the new test fails without the change; no assertion was weakened to make it pass |
-| Contract | SSE shapes, API routes and `.genie/` file formats match the UI and the docs |
+| Contract | SSE shapes, API routes and `.anneal/` file formats match the UI and the docs |
 | Safety | path escapes rejected, commands still bounded, no secret or telemetry added |
 | Scope | unrelated refactors, formatting churn and dependency bumps are not mixed in |
 | Docs | README / `docs/` / `PROGRESS.md` agree with the code |
@@ -110,5 +110,5 @@ Keep the title in the same style as a commit subject; it becomes the merge commi
 | --- | --- |
 | Your branch fell behind `main` | `git fetch upstream && git rebase upstream/main`, resolve, `git push --force-with-lease` |
 | You committed a secret | rotate the key first, then remove it from history; do not just delete the line |
-| You committed `.genie/` or `dist/` | `git rm -r --cached .genie dist`, commit the removal, confirm `.gitignore` covers it |
+| You committed `.anneal/` or `dist/` | `git rm -r --cached .anneal dist`, commit the removal, confirm `.gitignore` covers it |
 | A test fails only on your machine | check for a local model server on `:1234` (the API health test expects it to be offline) and for stale `dist/` output |

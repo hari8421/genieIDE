@@ -1,4 +1,4 @@
-# genie
+# Anneal
 
 ![CI](https://github.com/hari8421/genieIDE/actions/workflows/ci.yml/badge.svg)
 
@@ -14,7 +14,7 @@ requirements.md  →  design.md  →  tasks.md  →  agent executes task-by-task
 Kiro's value is not the text editor; it is the workflow around the model: a spec that forces
 requirements before code, hooks that automate the boring parts, steering files that keep the
 model aligned with your conventions, checkpoints you can roll back, and an agent loop that
-does not fall over when one run goes wrong. `genie` implements that workflow against a local
+does not fall over when one run goes wrong. `anneal` implements that workflow against a local
 OpenAI-compatible endpoint.
 
 ## Feature map
@@ -59,11 +59,11 @@ npm install
 
 # 1. In LM Studio: load a model, then start the local server (default port 1234).
 
-# 2. Point genie at it (defaults already match LM Studio).
-cp .genie.example/config.json .genie/config.json        # optional, edit model id
-mkdir -p .genie/hooks .genie/steering
-cp -r .genie.example/hooks/* .genie/hooks/              # optional
-cp -r .genie.example/steering/* .genie/steering/        # optional
+# 2. Point Anneal at it (defaults already match LM Studio).
+cp .anneal.example/config.json .anneal/config.json        # optional, edit model id
+mkdir -p .anneal/hooks .anneal/steering
+cp -r .anneal.example/hooks/* .anneal/hooks/              # optional
+cp -r .anneal.example/steering/* .anneal/steering/        # optional
 
 # 3. Run it
 npm run dev        # API on :8787, UI on :5173
@@ -85,35 +85,35 @@ Build standalone executables that bundle the server *and* the UI, so the target 
 Node install:
 
 ```bash
-npm run build-desktop     # typecheck + vite build + three binaries in pkg-out/genie/
-./pkg-out/genie/genie-ide-linux-x64
+npm run build-desktop     # typecheck + vite build + three binaries in pkg-out/anneal/
+./pkg-out/anneal/anneal-ide-linux-x64
 ```
 
-One `pkg` run produces `genie-ide-linux-x64`, `genie-ide-macos-arm64` and
-`genie-ide-win-x64.exe`. The binary serves the app on <http://127.0.0.1:8787> and opens your default
-browser at it, so a double-click behaves like an app; set `GENIE_NO_OPEN=1` to keep it headless for
+One `pkg` run produces `anneal-ide-linux-x64`, `anneal-ide-macos-arm64` and
+`anneal-ide-win-x64.exe`. The binary serves the app on <http://127.0.0.1:8787> and opens your default
+browser at it, so a double-click behaves like an app; set `ANNEAL_NO_OPEN=1` to keep it headless for
 servers and CI. The macOS binary is cross-built and unsigned, so run
-`codesign --sign - pkg-out/genie/genie-ide-macos-arm64` before launching it there.
+`codesign --sign - pkg-out/anneal/anneal-ide-macos-arm64` before launching it there.
 
-`GENIE_DESKTOP_TARGETS=node24-linux-x64` narrows the build, `GENIE_DESKTOP_SKIP_PKG=1` stops after
-staging the bundle (useful in CI), and `GENIE_PORT` / `GENIE_WORKSPACE` behave as they do in dev.
+`ANNEAL_DESKTOP_TARGETS=node24-linux-x64` narrows the build, `ANNEAL_DESKTOP_SKIP_PKG=1` stops after
+staging the bundle (useful in CI), and `ANNEAL_PORT` / `ANNEAL_WORKSPACE` behave as they do in dev.
 
 ### Using a different host/port for LM Studio
 
-`.genie/config.json`:
+`.anneal/config.json`:
 
 ```json
 { "lmStudioBaseUrl": "http://192.168.1.20:1234/v1", "model": "qwen2.5-coder-14b-instruct" }
 ```
 
-or environment variables: `LMSTUDIO_BASE_URL`, `GENIE_MODEL`, `GENIE_CONTEXT_BUDGET`,
-`GENIE_AUTONOMY=supervised`, `GENIE_MAX_STEPS`, `GENIE_MAX_ATTEMPTS`, `GENIE_ALLOW_COMMANDS`.
+or environment variables: `LMSTUDIO_BASE_URL`, `ANNEAL_MODEL`, `ANNEAL_CONTEXT_BUDGET`,
+`ANNEAL_AUTONOMY=supervised`, `ANNEAL_MAX_STEPS`, `ANNEAL_MAX_ATTEMPTS`, `ANNEAL_ALLOW_COMMANDS`.
 
 ### Using an external model API (optional)
 
 Local models stay the default, but any OpenAI-compatible API can be used instead — handy when one
 task needs more reasoning than your machine can serve. Set it in the **Models** tab, or in
-`.genie/config.json`:
+`.anneal/config.json`:
 
 ```json
 {
@@ -124,11 +124,11 @@ task needs more reasoning than your machine can serve. Set it in the **Models** 
 }
 ```
 
-Environment equivalents: `GENIE_PROVIDER=external`, `GENIE_EXTERNAL_BASE_URL`,
-`GENIE_EXTERNAL_MODEL`, `GENIE_EXTERNAL_API_KEY`. The client only speaks `/chat/completions` with
+Environment equivalents: `ANNEAL_PROVIDER=external`, `ANNEAL_EXTERNAL_BASE_URL`,
+`ANNEAL_EXTERNAL_MODEL`, `ANNEAL_EXTERNAL_API_KEY`. The client only speaks `/chat/completions` with
 SSE and tool calls, so OpenAI, Groq, OpenRouter, Together, DeepSeek and self-hosted gateways all
-work — you need a base URL, a model name and a key, nothing vendor-specific. `.genie/` is
-git-ignored, and `GENIE_EXTERNAL_API_KEY` keeps the key out of any file entirely.
+work — you need a base URL, a model name and a key, nothing vendor-specific. `.anneal/` is
+git-ignored, and `ANNEAL_EXTERNAL_API_KEY` keeps the key out of any file entirely.
 
 ## Debugging and navigation
 
@@ -167,7 +167,7 @@ model's wording is canned; everything else — tools, journal, checkpoints, tran
 
 ### 1. Open a workspace and a file
 
-![The genie workspace: file tree, Monaco editor, agent panel and status bar](docs/images/01-workspace.png)
+![The Anneal workspace: file tree, Monaco editor, agent panel and status bar](docs/images/01-workspace.png)
 
 The status bar tells you whether the model endpoint answers, which workspace is open, and how much
 of the context budget the last prompt used. Tick the checkbox beside a file to pin it to the agent's
@@ -194,7 +194,7 @@ each tool call. A write is always preceded by a checkpoint, so nothing is lost.
 ![The Specs tab with generated documents and a task checklist](docs/images/04-specs.png)
 
 Create a spec, describe the feature, and hit **Generate spec**. You get `requirements.md`,
-`design.md` and `tasks.md` in `.genie/specs/<id>/` — plain markdown you can edit, which the agent
+`design.md` and `tasks.md` in `.anneal/specs/<id>/` — plain markdown you can edit, which the agent
 treats as high-priority context. **Run next task** implements the first unchecked task and checks
 it off only when the run succeeds; **Run** on a row implements just that task.
 
@@ -218,7 +218,7 @@ tool), which is how conventions survive across runs and restarts.
 
 ![The Runs tab with journaled runs and a resume action](docs/images/07-runs.png)
 
-Every run is journaled under `.genie/runs/<id>/journal.jsonl`. **Resume** continues an interrupted
+Every run is journaled under `.anneal/runs/<id>/journal.jsonl`. **Resume** continues an interrupted
 run from its last completed step instead of replaying the tools it already ran.
 
 ### Keyboard shortcuts
@@ -305,7 +305,7 @@ npm test && npm run typecheck && npm run build   # gates
 ```
 
 No LM Studio is needed to run the tests or build; one concern per pull request, a regression test
-with every fix, and no secrets or `.genie/` state in the diff.
+with every fix, and no secrets or `.anneal/` state in the diff.
 
 ## Safety
 

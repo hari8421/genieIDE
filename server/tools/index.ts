@@ -184,7 +184,7 @@ export const applyPatchTool: Tool = {
 
 export const listFilesTool: Tool = {
   name: 'list_files',
-  description: 'List workspace files as a tree. Ignored directories (node_modules, .git, dist, .genie) are skipped.',
+  description: 'List workspace files as a tree. Ignored directories (node_modules, .git, dist, .anneal) are skipped.',
   parameters: {
     type: 'object',
     properties: {
@@ -390,7 +390,7 @@ export const runCommandTool: Tool = {
   },
   async run(args, ctx) {
     if (!ctx.allowCommands) {
-      return { ok: false, content: 'Command execution is disabled. Set "allowCommands": true in .genie/config.json to enable it.' };
+      return { ok: false, content: 'Command execution is disabled. Set "allowCommands": true in .anneal/config.json to enable it.' };
     }
     const command = reqStr(args, 'command');
     const verdict = checkCommandAllowed(command);

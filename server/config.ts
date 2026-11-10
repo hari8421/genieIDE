@@ -6,7 +6,7 @@ export type Autonomy = 'autopilot' | 'supervised';
 /** Where completions come from: a local LM Studio server or a hosted API. */
 export type ModelProvider = 'lmstudio' | 'external';
 
-export interface GenieConfig {
+export interface AnnealConfig {
   /** Absolute path of the workspace the agent is allowed to touch. */
   workspaceRoot: string;
   /** OpenAI-compatible base URL. LM Studio defaults to 127.0.0.1:1234/v1. */
@@ -39,7 +39,7 @@ export interface GenieConfig {
   allowCommands: boolean;
 }
 
-export const DEFAULT_CONFIG: Omit<GenieConfig, 'workspaceRoot'> = {
+export const DEFAULT_CONFIG: Omit<AnnealConfig, 'workspaceRoot'> = {
   lmStudioBaseUrl: 'http://127.0.0.1:1234/v1',
   model: 'local-model',
   provider: 'lmstudio',
@@ -59,8 +59,8 @@ export const DEFAULT_CONFIG: Omit<GenieConfig, 'workspaceRoot'> = {
   allowCommands: true,
 };
 
-export interface GeniePaths {
-  genie: string;
+export interface AnnealPaths {
+  anneal: string;
   config: string;
   specs: string;
   runs: string;
@@ -70,17 +70,17 @@ export interface GeniePaths {
   mcp: string;
 }
 
-export function geniePaths(workspaceRoot: string): GeniePaths {
-  const genie = path.join(workspaceRoot, '.genie');
+export function annealPaths(workspaceRoot: string): AnnealPaths {
+  const anneal = path.join(workspaceRoot, '.anneal');
   return {
-    genie,
-    config: path.join(genie, 'config.json'),
-    specs: path.join(genie, 'specs'),
-    runs: path.join(genie, 'runs'),
-    checkpoints: path.join(genie, 'checkpoints'),
-    hooks: path.join(genie, 'hooks'),
-    steering: path.join(genie, 'steering'),
-    mcp: path.join(genie, 'mcp.json'),
+    anneal,
+    config: path.join(anneal, 'config.json'),
+    specs: path.join(anneal, 'specs'),
+    runs: path.join(anneal, 'runs'),
+    checkpoints: path.join(anneal, 'checkpoints'),
+    hooks: path.join(anneal, 'hooks'),
+    steering: path.join(anneal, 'steering'),
+    mcp: path.join(anneal, 'mcp.json'),
   };
 }
 
@@ -113,62 +113,62 @@ function str(value: unknown, fallback: string): string {
 export interface LoadConfigOptions {
   workspaceRoot?: string;
   env?: NodeJS.ProcessEnv;
-  overrides?: Partial<GenieConfig>;
+  overrides?: Partial<AnnealConfig>;
 }
 
 /**
- * Layered config: defaults <- .genie/config.json <- environment <- explicit overrides.
+ * Layered config: defaults <- .anneal/config.json <- environment <- explicit overrides.
  * Never throws on malformed config; bad values fall back to defaults.
  */
-export function loadConfig(options: LoadConfigOptions = {}): GenieConfig {
+export function loadConfig(options: LoadConfigOptions = {}): AnnealConfig {
   const workspaceRoot = path.resolve(options.workspaceRoot ?? process.cwd());
   const env = options.env ?? process.env;
-  const file = readJsonIfExists(geniePaths(workspaceRoot).config);
+  const file = readJsonIfExists(annealPaths(workspaceRoot).config);
 
-  const autonomyRaw = str(env.GENIE_AUTONOMY ?? file.autonomy, DEFAULT_CONFIG.autonomy);
+  const autonomyRaw = str(env.ANNEAL_AUTONOMY ?? file.autonomy, DEFAULT_CONFIG.autonomy);
   const autonomy: Autonomy = autonomyRaw === 'supervised' ? 'supervised' : 'autopilot';
 
-  const config: GenieConfig = {
+  const config: AnnealConfig = {
     workspaceRoot,
     lmStudioBaseUrl: str(
-      env.LMSTUDIO_BASE_URL ?? env.GENIE_LMSTUDIO_URL ?? file.lmStudioBaseUrl,
+      env.LMSTUDIO_BASE_URL ?? env.ANNEAL_LMSTUDIO_URL ?? file.lmStudioBaseUrl,
       DEFAULT_CONFIG.lmStudioBaseUrl,
     ),
-    model: str(env.GENIE_MODEL ?? file.model, DEFAULT_CONFIG.model),
+    model: str(env.ANNEAL_MODEL ?? file.model, DEFAULT_CONFIG.model),
     provider:
-      str(env.GENIE_PROVIDER ?? file.provider, DEFAULT_CONFIG.provider) === 'external' ? 'external' : 'lmstudio',
+      str(env.ANNEAL_PROVIDER ?? file.provider, DEFAULT_CONFIG.provider) === 'external' ? 'external' : 'lmstudio',
     externalBaseUrl: str(
-      env.GENIE_EXTERNAL_BASE_URL ?? file.externalBaseUrl,
+      env.ANNEAL_EXTERNAL_BASE_URL ?? file.externalBaseUrl,
       DEFAULT_CONFIG.externalBaseUrl,
     ),
-    externalModel: str(env.GENIE_EXTERNAL_MODEL ?? file.externalModel, DEFAULT_CONFIG.externalModel),
+    externalModel: str(env.ANNEAL_EXTERNAL_MODEL ?? file.externalModel, DEFAULT_CONFIG.externalModel),
     externalApiKey: str(
-      env.GENIE_EXTERNAL_API_KEY ?? file.externalApiKey,
+      env.ANNEAL_EXTERNAL_API_KEY ?? file.externalApiKey,
       DEFAULT_CONFIG.externalApiKey,
     ),
-    temperature: num(env.GENIE_TEMPERATURE ?? file.temperature, DEFAULT_CONFIG.temperature),
-    maxTokens: num(env.GENIE_MAX_TOKENS ?? file.maxTokens, DEFAULT_CONFIG.maxTokens),
+    temperature: num(env.ANNEAL_TEMPERATURE ?? file.temperature, DEFAULT_CONFIG.temperature),
+    maxTokens: num(env.ANNEAL_MAX_TOKENS ?? file.maxTokens, DEFAULT_CONFIG.maxTokens),
     contextBudgetTokens: Math.max(
       1024,
-      num(env.GENIE_CONTEXT_BUDGET ?? file.contextBudgetTokens, DEFAULT_CONFIG.contextBudgetTokens),
+      num(env.ANNEAL_CONTEXT_BUDGET ?? file.contextBudgetTokens, DEFAULT_CONFIG.contextBudgetTokens),
     ),
     reserveOutputTokens: num(
-      env.GENIE_RESERVE_OUTPUT ?? file.reserveOutputTokens,
+      env.ANNEAL_RESERVE_OUTPUT ?? file.reserveOutputTokens,
       DEFAULT_CONFIG.reserveOutputTokens,
     ),
-    maxAgentSteps: Math.max(1, num(env.GENIE_MAX_STEPS ?? file.maxAgentSteps, DEFAULT_CONFIG.maxAgentSteps)),
+    maxAgentSteps: Math.max(1, num(env.ANNEAL_MAX_STEPS ?? file.maxAgentSteps, DEFAULT_CONFIG.maxAgentSteps)),
     maxToolRepairs: Math.max(0, num(file.maxToolRepairs, DEFAULT_CONFIG.maxToolRepairs)),
-    maxAttempts: Math.max(1, num(env.GENIE_MAX_ATTEMPTS ?? file.maxAttempts, DEFAULT_CONFIG.maxAttempts)),
+    maxAttempts: Math.max(1, num(env.ANNEAL_MAX_ATTEMPTS ?? file.maxAttempts, DEFAULT_CONFIG.maxAttempts)),
     requestTimeoutMs: Math.max(
       1000,
-      num(env.GENIE_REQUEST_TIMEOUT ?? file.requestTimeoutMs, DEFAULT_CONFIG.requestTimeoutMs),
+      num(env.ANNEAL_REQUEST_TIMEOUT ?? file.requestTimeoutMs, DEFAULT_CONFIG.requestTimeoutMs),
     ),
     autonomy,
     commandTimeoutMs: Math.max(
       1000,
       num(file.commandTimeoutMs, DEFAULT_CONFIG.commandTimeoutMs),
     ),
-    allowCommands: bool(env.GENIE_ALLOW_COMMANDS ?? file.allowCommands, DEFAULT_CONFIG.allowCommands),
+    allowCommands: bool(env.ANNEAL_ALLOW_COMMANDS ?? file.allowCommands, DEFAULT_CONFIG.allowCommands),
     ...options.overrides,
   };
 
@@ -183,7 +183,7 @@ export interface ResolvedEndpoint {
 }
 
 /** The endpoint the LLM client should talk to for this config. */
-export function resolveEndpoint(config: GenieConfig): ResolvedEndpoint {
+export function resolveEndpoint(config: AnnealConfig): ResolvedEndpoint {
   if (config.provider === 'external') {
     return {
       provider: 'external',

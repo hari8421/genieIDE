@@ -8,7 +8,7 @@ let root: string;
 let memory: AgentMemory;
 
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), 'genie-memory-'));
+  root = await mkdtemp(path.join(os.tmpdir(), 'anneal-memory-'));
   memory = new AgentMemory(root);
   await memory.init();
 });

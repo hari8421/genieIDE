@@ -111,7 +111,7 @@ export function breakpointDecorations(
       range: new monaco.Range(breakpoint.line, 1, breakpoint.line, 1),
       options: {
         isWholeLine: true,
-        glyphMarginClassName: 'genie-breakpoint',
+        glyphMarginClassName: 'anneal-breakpoint',
         glyphMarginHoverMessage: { value: `Breakpoint at line ${breakpoint.line}` },
       },
     }));

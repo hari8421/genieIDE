@@ -1,4 +1,4 @@
-# genie — Detailed Design
+# Anneal — Detailed Design
 
 Status: implemented, tested on Node 24 / LM Studio-compatible endpoints.
 Last updated: 2026-10-30.
@@ -8,7 +8,7 @@ Last updated: 2026-10-30.
 ## 1. Problem and goals
 
 Kiro (AWS) showed that an agent is only useful when the work is *specified before it is
-generated* and when the agent can survive its own failures. `genie` rebuilds that workflow for
+generated* and when the agent can survive its own failures. `anneal` rebuilds that workflow for
 people who run models locally.
 
 ### Goals
@@ -28,7 +28,7 @@ people who run models locally.
 
 ### Non-goals (deliberate)
 
-- A Code OSS fork. That is a multi-year project; `genie` is a web IDE with a real editor.
+- A Code OSS fork. That is a multi-year project; `anneal` is a web IDE with a real editor.
 - A general language-server platform and multi-runtime debug adapters. Peek/navigation for JS/TS
   comes from Monaco's bundled TypeScript service and debugging from Node's inspector; there is no
   LSP client and no DAP adapter layer.
@@ -65,10 +65,10 @@ people who run models locally.
                         └────────────────┘
 ```
 
-Everything stateful lives under `.genie/` in the workspace:
+Everything stateful lives under `.anneal/` in the workspace:
 
 ```
-.genie/
+.anneal/
   config.json            user config (model, budget, autonomy, commands)
   specs/<id>/{requirements,design,tasks}.md
   runs/<runId>/journal.jsonl
@@ -144,8 +144,8 @@ Event types: `run.start`, `resume`, `context`, `assistant`, `tool.call`, `tool.r
 ### 3.4 `agent/checkpoints.ts` — reversibility
 
 Not git-based: git would disturb the user's index/stash and assumes a repository exists. Instead
-files are copied to `.genie/checkpoints/<id>/files/` with a SHA-256 manifest (1 MB/file, 40 MB
-total caps; `node_modules`, `.git`, `dist`, `.genie` excluded). `diff` compares hashes; `restore`
+files are copied to `.anneal/checkpoints/<id>/files/` with a SHA-256 manifest (1 MB/file, 40 MB
+total caps; `node_modules`, `.git`, `dist`, `.anneal` excluded). `diff` compares hashes; `restore`
 rewrites changed files, recreates deleted ones and removes files added since the snapshot.
 
 ### 3.5 `context/builder.ts` — budgeted context
@@ -173,7 +173,7 @@ Assembly order:
 | `read_file` | line-numbered, windowed with `start_line`/`end_line` |
 | `write_file` | create/overwrite, 2 MB cap, checkpoint first |
 | `apply_patch` | SEARCH/REPLACE blocks, all-or-nothing, unique-match enforcement, whitespace-tolerant fallback |
-| `list_files` | tree, ignores `node_modules/.git/dist/.genie` |
+| `list_files` | tree, ignores `node_modules/.git/dist/.anneal` |
 | `search` | regex or literal, glob filter, capped results |
 | `run_command` | `bash -lc`, timeout, output caps, deny-list (git push/reset, rm -rf roots, sudo, downloads piped to a shell) |
 
@@ -206,7 +206,7 @@ emit file events; task completion emits `taskCompleted`; every user-triggered ru
 
 ### 3.9 `steering/` — conventions
 
-`.genie/steering/*.md` with optional frontmatter:
+`.anneal/steering/*.md` with optional frontmatter:
 
 ```yaml
 ---
@@ -228,7 +228,7 @@ spawned on an explicit connect request, not automatically.
 
 ### 3.11 `memory/` — cross-run agent memory
 
-Three files under `.genie/memory/`, all plain text so a user can read, edit or delete them:
+Three files under `.anneal/memory/`, all plain text so a user can read, edit or delete them:
 
 | File | Written | Read by |
 | --- | --- | --- |
@@ -250,7 +250,7 @@ class AgentMemory {
 
 Integration points, deliberately few:
 
-1. **Prompt.** `GenieService.buildSections` prepends `core.md` as a pinned `memory` section
+1. **Prompt.** `AnnealService.buildSections` prepends `core.md` as a pinned `memory` section
    (priority 96). Pinned sections are truncated, never dropped, so the agent always sees its own
    notes — but the store caps `core.md` at `maxCoreLines` (120) lines so it cannot crowd out the
    workspace.
@@ -272,8 +272,8 @@ failed memory write is swallowed for run events and surfaced as a tool error for
 | `lmstudio` (default) | `lmStudioBaseUrl` | `model` | none |
 | `external` | `externalBaseUrl` | `externalModel`, falling back to `model` | `Bearer externalApiKey` if set |
 
-Layering is unchanged (defaults ← `.genie/config.json` ← environment ← overrides), so
-`GENIE_PROVIDER=external` wins over a stored value and an unknown provider string degrades to
+Layering is unchanged (defaults ← `.anneal/config.json` ← environment ← overrides), so
+`ANNEAL_PROVIDER=external` wins over a stored value and an unknown provider string degrades to
 `lmstudio` rather than failing the boot. Because the client only speaks `/chat/completions` with
 SSE and tool calls, no per-vendor code exists: the switch is three config fields plus the
 `apiKey` the client already supported.
@@ -285,7 +285,7 @@ SSE and tool calls, no per-vendor code exists: the switch is three config fields
 1. `vite build` produces `dist/` (SPA + hashed assets).
 2. The whole `dist/` tree is copied into `.desktop-pkg-dist/`.
 3. A generated entry (`createServer` + signal handling) is bundled with esbuild into
-   `dist/bin/genie-server.cjs` — CommonJS, because `pkg` handles CJS snapshots reliably and it
+   `dist/bin/anneal-server.cjs` — CommonJS, because `pkg` handles CJS snapshots reliably and it
    removes all runtime module resolution.
 4. The staged `package.json` declares `bin` (required by `pkg`) and
    `pkg.assets: ["dist/**/*"]`, so the SPA is snapshotted as data.
@@ -318,7 +318,7 @@ debuggee or a status that lied:
 No dependency is needed: Node ≥22 exposes a global `WebSocket`, and older runtimes get a clear
 error. Under `pkg` there is no node binary to spawn, and `PKG_EXECPATH=PKG_INVOKE_NODEJS` is
 rejected by this bootstrap ("bad option: --inspect-brk"), so the session launches the debuggee with
-a real Node install instead (`GENIE_NODE` overrides it) and fails with a clear message when absent. `.js` runs directly; `.ts` relies on Node ≥23.6
+a real Node install instead (`ANNEAL_NODE` overrides it) and fails with a clear message when absent. `.js` runs directly; `.ts` relies on Node ≥23.6
 type stripping (or `--experimental-strip-types`). Paths are resolved inside the workspace, so a
 script outside it is rejected before anything is spawned.
 
@@ -352,7 +352,7 @@ keystroke into a 200 MB download; other languages keep editing without navigatio
 | Process crash | missing `run.end` | resume from journal, skip finished keys | tool results replayed from journal |
 | Repeated step failure | `consecutiveFailures > maxToolRepairs` | fail fast, keep journal, expose Resume | n/a |
 
-Deliberate limitation: `genie` never auto-restores a checkpoint behind your back. Destructive
+Deliberate limitation: `anneal` never auto-restores a checkpoint behind your back. Destructive
 rollback is an explicit action in the Undo panel.
 
 ---
@@ -395,7 +395,7 @@ model.
 
 ## 7. Kiro parity and gaps
 
-| Kiro feature | genie | Notes |
+| Kiro feature | Anneal | Notes |
 | --- | --- | --- |
 | Specs (requirements/design/tasks) | ✅ | Same three artifacts, EARS requirements, R-ID traceability |
 | Task execution from `tasks.md` | ✅ | Checkbox only flips on success |

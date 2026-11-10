@@ -1,5 +1,5 @@
 {
-  "name": "genie-ide",
+  "name": "anneal-ide",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -17,7 +17,7 @@
     "test:watch": "vitest",
     "start": "tsx server/index.ts",
     "build-desktop": "npm run build && node scripts/build-desktop.mjs",
-    "start-desktop": "GENIE_EMBEDDED_DIST=dist GENIE_PORT=8787 GENIE_WORKSPACE=. node server/index.ts"
+    "start-desktop": "ANNEAL_EMBEDDED_DIST=dist ANNEAL_PORT=8787 ANNEAL_WORKSPACE=. node server/index.ts"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",

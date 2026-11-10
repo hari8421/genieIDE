@@ -14,10 +14,10 @@ process.env.NODE_ENV = 'production';
 
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 const TARGETS =
-  process.env.GENIE_DESKTOP_TARGETS ??
+  process.env.ANNEAL_DESKTOP_TARGETS ??
   pkg['pkg:targets'] ??
   ['node24-linux-x64', 'node24-macos-arm64', 'node24-win-x64'].join(',');
-const OUT_PATH = process.env.GENIE_DESKTOP_OUT ?? join(OUT, 'genie');
+const OUT_PATH = process.env.ANNEAL_DESKTOP_OUT ?? join(OUT, 'anneal');
 const COMPRESS = pkg['pkg:compress'] ?? 'GZip';
 
 console.log(`[build-desktop] targets: ${TARGETS}`);
@@ -41,7 +41,7 @@ try {
   const { build } = await import('esbuild');
   await build({
     entryPoints: [ENTRY],
-    outfile: join(PKGDIST, 'dist', 'bin', 'genie-server.cjs'),
+    outfile: join(PKGDIST, 'dist', 'bin', 'anneal-server.cjs'),
     bundle: true,
     platform: 'node',
     format: 'cjs',
@@ -61,7 +61,7 @@ writeFileSync(
       version: pkg.version,
       private: true,
       type: 'commonjs',
-      bin: { genie: './dist/bin/genie-server.cjs' },
+      bin: { anneal: './dist/bin/anneal-server.cjs' },
       // pkg only snapshots files listed as assets; the SPA must be explicit.
       pkg: { assets: ['dist/**/*'], scripts: [] },
     },
@@ -71,11 +71,11 @@ writeFileSync(
   'utf8',
 );
 
-const bundlePath = join(PKGDIST, 'dist', 'bin', 'genie-server.cjs');
+const bundlePath = join(PKGDIST, 'dist', 'bin', 'anneal-server.cjs');
 console.log(`[build-desktop] bundled server: ${relative(ROOT, bundlePath)}`);
 
-if (process.env.GENIE_DESKTOP_SKIP_PKG === '1') {
-  console.log('[build-desktop] GENIE_DESKTOP_SKIP_PKG=1 — packaging skipped');
+if (process.env.ANNEAL_DESKTOP_SKIP_PKG === '1') {
+  console.log('[build-desktop] ANNEAL_DESKTOP_SKIP_PKG=1 — packaging skipped');
   process.exit(0);
 }
 
@@ -146,7 +146,7 @@ const expected = await (async () => {
 const files = expected.length > 0 ? expected : walkSync(OUT);
 const binaries = files.filter((file) => {
   const name = basename(file);
-  if (name.endsWith('.exe') || /^genie(-ide)?-/.test(name)) return true;
+  if (name.endsWith('.exe') || /^anneal(-ide)?-/.test(name)) return true;
   return sizeOf(file) >= 5_000_000;
 });
 if (binaries.length === 0) {
@@ -175,14 +175,14 @@ import { spawn } from 'node:child_process';
 import { createServer, finishShutdown } from './server/http';
 
 // A double-clicked binary that only prints to a console nobody is watching looks
-// broken, so the desktop entry opens the UI. GENIE_NO_OPEN=1 opts out (servers,
+// broken, so the desktop entry opens the UI. ANNEAL_NO_OPEN=1 opts out (servers,
 // CI) and a missing opener degrades to a warning instead of a failed start.
 function openBrowser(url: string): void {
   const command: string =
     process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
   const args: string[] =
     command === 'open' ? [url] : command === 'cmd' ? ['/c', 'start', '', url] : [url];
-  const fallback = () => console.warn('[genie] could not open a browser — open ' + url + ' manually');
+  const fallback = () => console.warn('[anneal] could not open a browser — open ' + url + ' manually');
   try {
     const child = spawn(command, args, { detached: true, stdio: 'ignore' });
     child.on('error', fallback);
@@ -194,17 +194,17 @@ function openBrowser(url: string): void {
 
 async function main() {
   // Bundled into dist/bin, so the copied SPA sits one level up.
-  const embeddedDist = process.env.GENIE_EMBEDDED_DIST ?? path.join(__dirname, '..');
-  const workspace = path.resolve(process.env.GENIE_WORKSPACE ?? process.cwd());
+  const embeddedDist = process.env.ANNEAL_EMBEDDED_DIST ?? path.join(__dirname, '..');
+  const workspace = path.resolve(process.env.ANNEAL_WORKSPACE ?? process.cwd());
   const server = await createServer({ workspace, embeddedDist });
   await server.listen();
 
   const url =
-    'http://' + (process.env.GENIE_HOST ?? '127.0.0.1') + ':' + (process.env.GENIE_PORT ?? '8787');
-  if (process.env.GENIE_NO_OPEN === '1') {
-    console.log('[genie] browser auto-open disabled; open ' + url + ' manually');
+    'http://' + (process.env.ANNEAL_HOST ?? '127.0.0.1') + ':' + (process.env.ANNEAL_PORT ?? '8787');
+  if (process.env.ANNEAL_NO_OPEN === '1') {
+    console.log('[anneal] browser auto-open disabled; open ' + url + ' manually');
   } else {
-    console.log('[genie] opening ' + url);
+    console.log('[anneal] opening ' + url);
     openBrowser(url);
   }
 
@@ -220,7 +220,7 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error('[genie] could not start:', error);
+  console.error('[anneal] could not start:', error);
   process.exit(1);
 });
 `;

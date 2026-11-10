@@ -1112,7 +1112,7 @@ code {
 }
 
 /* ---------- debugger ---------- */
-.genie-breakpoint {
+.anneal-breakpoint {
   background: var(--red);
   border-radius: 50%;
   width: 9px !important;

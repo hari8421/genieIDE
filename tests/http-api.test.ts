@@ -23,7 +23,7 @@ async function waitForServer(url: string, attempts = 60): Promise<void> {
 }
 
 beforeAll(async () => {
-  workspace = await tempDir('genie-http-');
+  workspace = await tempDir('anneal-http-');
   await writeFiles(workspace, { 'src/existing.ts': 'export const existing = true;\n' });
   const port = 18_000 + Math.floor(Math.random() * 1000);
   baseUrl = `http://127.0.0.1:${port}`;
@@ -31,10 +31,10 @@ beforeAll(async () => {
     cwd: projectRoot,
     env: {
       ...process.env,
-      GENIE_WORKSPACE: workspace,
-      GENIE_PORT: String(port),
-      GENIE_HOST: '127.0.0.1',
-      GENIE_MODEL: 'test-model',
+      ANNEAL_WORKSPACE: workspace,
+      ANNEAL_PORT: String(port),
+      ANNEAL_HOST: '127.0.0.1',
+      ANNEAL_MODEL: 'test-model',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

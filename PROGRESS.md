@@ -1,4 +1,4 @@
-# genie — Progress
+# Anneal — Progress
 
 Last updated: 2026-11-10
 Branch: `main`
@@ -15,14 +15,14 @@ Stage: **M2 — local-first agentic IDE with desktop executables, pluggable prov
 | Production bundle | `npm run build` (typecheck + `vite build`) | passing |
 | Desktop executables | `node scripts/build-desktop.mjs` | **exit 0**, three binaries (Linux 78 MB, macOS arm64 70 MB, Windows 97 MB) |
 | Runtime end-to-end | stub OpenAI-compatible server + 24-check driver | **24/24** against the `tsx` server *and* the packaged Linux binary: provider routing, bearer key, SSE run, pinned memory in the prompt, `remember` tool, fact delete, path escape, SPA assets |
-| Packaged binary smoke test | `pkg-out/genie/genie-ide-linux-x64` → `/api/health`, `/api/memory`, `/` | passing (real HTTP responses served from the binary) |
+| Packaged binary smoke test | `pkg-out/anneal/anneal-ide-linux-x64` → `/api/health`, `/api/memory`, `/` | passing (real HTTP responses served from the binary) |
 | Memory across restarts | restart the binary on the same workspace | passing — `core.md` rebuilt from `facts.jsonl`, facts and event count intact |
 | Provider + memory regression | `tests/provider-memory.e2e.test.ts` (in `npm test`) | the throwaway driver is now a committed test: stub provider, bearer key, real prompt asserts |
 | Debugger (real inspector) | `tests/debug.test.ts` | breakpoint pause, locals, in-frame evaluation and stepping against a live `node --inspect-brk` child |
 | Language service | `tests/intel.test.ts` | source bundle filters, size caps, truncation flag |
 | Transcript reducer | `tests/session.test.ts` | wrapped `{type, step, data}` events, delta streaming, tool pairing, unwrapped `result`/`error` |
 | UI in a browser | headless Chromium against `npm run dev` | quick open, file open, agent run, spec panel, runs, undo, models, plus per-tab undo history and the unsaved-close guard — screenshots in `docs/images/` (stub OpenAI-compatible endpoint, not LM Studio) |
-| Preview host | `curl -H 'Host: <preview>'` | **403 → 200** after `GENIE_ALLOWED_HOSTS` wiring (Vite 5 ignores `__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS`) |
+| Preview host | `curl -H 'Host: <preview>'` | **403 → 200** after `ANNEAL_ALLOWED_HOSTS` wiring (Vite 5 ignores `__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS`) |
 | CI workflow | `.github/workflows/ci.yml` | added: `npm ci`, typecheck, tests and build on push/PR to `main`. **Not yet observed on a GitHub runner** — the steps are the ones verified locally above |
 | HTTP smoke test | bundled server + `/api/health`, `/api/files` | passing |
 | Real LM Studio end-to-end | requires a local model | **not verified here** — no model server exists in the cloud runner |
@@ -40,8 +40,8 @@ overflow, cancellation and resume paths.
 - [x] OpenAI-compatible client for LM Studio (`server/llm/client.ts`)
 - [x] **Provider switch**: LM Studio (default) or any external OpenAI-compatible API
       (`provider`, `externalBaseUrl`, `externalModel`, `externalApiKey`)
-- [x] API key sent as a bearer token; key lives in `.genie/config.json` (git-ignored) or
-      `GENIE_EXTERNAL_API_KEY`
+- [x] API key sent as a bearer token; key lives in `.anneal/config.json` (git-ignored) or
+      `ANNEAL_EXTERNAL_API_KEY`
 - [x] SSE streaming with incremental assistant text
 - [x] Tool-call assembly from fragmented deltas
 - [x] Model discovery with context length (`GET /models`)
@@ -51,7 +51,7 @@ overflow, cancellation and resume paths.
 - [x] JSON repair loop for structured output (`server/llm/structured.ts`)
 
 ### Agent memory
-- [x] File-backed store under `.genie/memory/` (`server/memory/store.ts`)
+- [x] File-backed store under `.anneal/memory/` (`server/memory/store.ts`)
 - [x] Durable facts in `facts.jsonl`, deduplicated by key
 - [x] `core.md` rendered from the facts, capped at `maxCoreLines`, injected into every prompt as
       a **pinned context section** (never dropped, only truncated under budget pressure)
@@ -65,9 +65,9 @@ overflow, cancellation and resume paths.
 - [x] Server bundled to a single CommonJS file with esbuild; the built SPA ships as pkg assets
 - [x] Same `createServer` code path as the dev server (`server/http.ts`), so there is no
       desktop-only behaviour to keep in sync
-- [x] `build-desktop` / `start-desktop` npm scripts; `GENIE_DESKTOP_TARGETS`,
-      `GENIE_DESKTOP_OUT`, `GENIE_DESKTOP_SKIP_PKG` overrides
-- [x] Opens the dashboard in the default browser on launch (`GENIE_NO_OPEN=1` opts out); a missing
+- [x] `build-desktop` / `start-desktop` npm scripts; `ANNEAL_DESKTOP_TARGETS`,
+      `ANNEAL_DESKTOP_OUT`, `ANNEAL_DESKTOP_SKIP_PKG` overrides
+- [x] Opens the dashboard in the default browser on launch (`ANNEAL_NO_OPEN=1` opts out); a missing
       opener warns instead of failing the start
 - [x] Build reports a non-zero exit when pkg fails or produces nothing, and waits for pkg's
       outliving writers before scanning for outputs
@@ -80,7 +80,7 @@ overflow, cancellation and resume paths.
 - [x] Evaluate expressions in the paused frame
 - [x] Console, stdout and stderr streamed into the panel
 - [x] Refuses scripts outside the workspace; reports missing ones instead of hanging
-- [x] Debugs from the packaged desktop binary when Node.js is installed (`GENIE_NODE` overrides the
+- [x] Debugs from the packaged desktop binary when Node.js is installed (`ANNEAL_NODE` overrides the
       interpreter)
 
 ### Language intelligence (peek / navigation)
@@ -150,7 +150,7 @@ overflow, cancellation and resume paths.
 ### Documentation / examples
 - [x] `README.md` (setup, desktop build, providers, memory, feature map, safety)
 - [x] `docs/DESIGN.md` (architecture, module contracts, failure matrix, parity, roadmap)
-- [x] `.genie.example/` config, hook and steering samples
+- [x] `.anneal.example/` config, hook and steering samples
 
 ---
 

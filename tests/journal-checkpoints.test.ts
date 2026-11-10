@@ -85,7 +85,7 @@ describe('CheckpointStore', () => {
 
   it('ignores its own storage and node_modules', async () => {
     const root = await tempDir();
-    await writeFiles(root, { 'src/index.ts': 'x', 'node_modules/pkg/index.js': 'y', '.genie/runs/r/journal.jsonl': '{}' });
+    await writeFiles(root, { 'src/index.ts': 'x', 'node_modules/pkg/index.js': 'y', '.anneal/runs/r/journal.jsonl': '{}' });
     const store = new CheckpointStore(root);
     const manifest = await store.create('skip ignored');
     expect(manifest.files.map((f) => f.path)).toEqual(['src/index.ts']);

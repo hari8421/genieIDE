@@ -87,7 +87,7 @@ export default function EditorPane({
     });
 
     editor.addAction({
-      id: 'genie.toggleBreakpoint',
+      id: 'anneal.toggleBreakpoint',
       label: 'Toggle Breakpoint',
       keybindings: [monaco.KeyCode.F9],
       run: (instance) => {
@@ -137,7 +137,7 @@ export default function EditorPane({
                so switching tabs preserves undo history, cursor and scroll. */
             path={`${WORKSPACE_URI}/${active.path}`}
             language={active.language}
-            theme="genie-dark"
+            theme="anneal-dark"
             value={active.content}
             onChange={(value) => onChange(active.path, value ?? '')}
             onMount={onMount}
@@ -159,7 +159,7 @@ export default function EditorPane({
           />
         ) : (
           <div className="editor-empty">
-            <h2>genie</h2>
+            <h2>anneal</h2>
             <p>A spec-driven agentic IDE running against your own LM Studio models.</p>
             <ul>
               <li>Ctrl/Cmd+P jumps to any file; open one on the left or create one.</li>

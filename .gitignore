@@ -9,7 +9,7 @@ pkg-out/
 .desktop-entry.ts
 
 # Runtime state: specs, journals, checkpoints, local config
-.genie/
+.anneal/
 
 # OS / editor noise
 .DS_Store

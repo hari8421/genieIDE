@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { ChatRequest, ChatResult, LMStudioClient } from '../server/llm/client';
 
-export async function tempDir(prefix = 'genie-test-'): Promise<string> {
+export async function tempDir(prefix = 'anneal-test-'): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), prefix));
 }
 

@@ -135,7 +135,7 @@ function formatRemote(value: Record<string, unknown> | undefined): string {
  */
 function resolveNodeBinary(): string {
   const candidates = [
-    process.env.GENIE_NODE,
+    process.env.ANNEAL_NODE,
     process.env.NODE,
     '/usr/local/bin/node',
     '/usr/bin/node',
@@ -151,7 +151,7 @@ function resolveNodeBinary(): string {
     }
   }
   throw new Error(
-    'Debugging from the desktop build needs Node.js installed; set GENIE_NODE to a node executable',
+    'Debugging from the desktop build needs Node.js installed; set ANNEAL_NODE to a node executable',
   );
 }
 
@@ -201,7 +201,7 @@ export class DebugSession {
       absolute,
     ];
 
-    // A packaged build has no node binary to spawn: process.execPath is genie
+    // A packaged build has no node binary to spawn: process.execPath is anneal
     // itself, and pkg's PKG_EXECPATH=PKG_INVOKE_NODEJS escape hatch does not
     // survive this bootstrap (@yao-pkg rejects --inspect-brk with "bad option").
     // Fall back to a real Node install and say so clearly when there is none.
@@ -212,7 +212,7 @@ export class DebugSession {
       stdio: ['ignore', 'pipe', 'pipe'],
       // A debuggee must not inherit the harness's Node flags (vitest sets its
       // own); leaking them changes how the inspector pauses.
-      env: { ...process.env, GENIE_DEBUG: '1', NODE_OPTIONS: '' },
+      env: { ...process.env, ANNEAL_DEBUG: '1', NODE_OPTIONS: '' },
     });
 
     this.child.stdout?.on('data', (chunk: Buffer) => this.push('stdout', chunk));

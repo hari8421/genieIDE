@@ -31,7 +31,7 @@ self.MonacoEnvironment = {
 
 loader.config({ monaco });
 
-monaco.editor.defineTheme('genie-dark', {
+monaco.editor.defineTheme('anneal-dark', {
   base: 'vs-dark',
   inherit: true,
   rules: [

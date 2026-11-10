@@ -101,9 +101,9 @@ describe('file tools', () => {
 describe('run_command', () => {
   it('runs a safe command and reports its output', async () => {
     const root = await tempDir();
-    const result = await runCommandTool.run({ command: 'echo genie-ok' }, context(root));
+    const result = await runCommandTool.run({ command: 'echo anneal-ok' }, context(root));
     expect(result.ok).toBe(true);
-    expect(result.content).toContain('genie-ok');
+    expect(result.content).toContain('anneal-ok');
   });
 
   it('blocks destructive and remote git commands', () => {

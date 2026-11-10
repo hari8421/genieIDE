@@ -4,7 +4,7 @@ import { tempDir, writeFiles } from './helpers';
 
 describe('workspace source collection', () => {
   it('collects JS/TS sources and skips ignored directories and other files', async () => {
-    const root = await tempDir('genie-intel-');
+    const root = await tempDir('anneal-intel-');
     await writeFiles(root, {
       'src/app.ts': 'export const app = 1;\n',
       'src/view.tsx': 'export const View = () => null;\n',
@@ -12,7 +12,7 @@ describe('workspace source collection', () => {
       'README.md': '# not source\n',
       'node_modules/dep/index.js': 'module.exports = 2;\n',
       'dist/bundle.js': 'var x = 1;\n',
-      '.genie/memory/core.md': '- fact\n',
+      '.anneal/memory/core.md': '- fact\n',
     });
 
     const bundle = await collectSources(root);
@@ -22,7 +22,7 @@ describe('workspace source collection', () => {
   });
 
   it('caps the bundle and reports truncation instead of failing', async () => {
-    const root = await tempDir('genie-intel-');
+    const root = await tempDir('anneal-intel-');
     await writeFiles(root, { 'a.ts': '1\n', 'b.ts': '2\n', 'c.ts': '3\n' });
 
     const bundle = await collectSources(root, { maxFiles: 2 });
@@ -31,7 +31,7 @@ describe('workspace source collection', () => {
   });
 
   it('skips files above the per-file size cap', async () => {
-    const root = await tempDir('genie-intel-');
+    const root = await tempDir('anneal-intel-');
     await writeFiles(root, {
       'small.ts': 'export const small = 1;\n',
       'huge.ts': `${'// padding line\n'.repeat(30_000)}export const huge = 1;\n`,
@@ -42,7 +42,7 @@ describe('workspace source collection', () => {
   });
 
   it('returns an empty bundle for a workspace without sources', async () => {
-    const root = await tempDir('genie-intel-');
+    const root = await tempDir('anneal-intel-');
     await writeFiles(root, { 'notes.txt': 'hello\n' });
     const bundle = await collectSources(root);
     expect(bundle.files).toEqual([]);

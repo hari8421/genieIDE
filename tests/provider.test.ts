@@ -12,10 +12,10 @@ afterEach(async () => {
 });
 
 async function workspace(config?: Record<string, unknown>): Promise<string> {
-  root = await mkdtemp(path.join(os.tmpdir(), 'genie-provider-'));
+  root = await mkdtemp(path.join(os.tmpdir(), 'anneal-provider-'));
   if (config) {
-    await mkdir(path.join(root, '.genie'), { recursive: true });
-    await writeFile(path.join(root, '.genie', 'config.json'), JSON.stringify(config), 'utf8');
+    await mkdir(path.join(root, '.anneal'), { recursive: true });
+    await writeFile(path.join(root, '.anneal', 'config.json'), JSON.stringify(config), 'utf8');
   }
   return root;
 }
@@ -38,10 +38,10 @@ describe('model provider config', () => {
     const config = loadConfig({
       workspaceRoot: dir,
       env: {
-        GENIE_PROVIDER: 'external',
-        GENIE_EXTERNAL_BASE_URL: 'https://api.example.com/v1',
-        GENIE_EXTERNAL_MODEL: 'fast-model',
-        GENIE_EXTERNAL_API_KEY: 'sk-test',
+        ANNEAL_PROVIDER: 'external',
+        ANNEAL_EXTERNAL_BASE_URL: 'https://api.example.com/v1',
+        ANNEAL_EXTERNAL_MODEL: 'fast-model',
+        ANNEAL_EXTERNAL_API_KEY: 'sk-test',
       },
     });
 
@@ -73,7 +73,7 @@ describe('model provider config', () => {
 
   it('lets the environment override the provider stored in config.json', async () => {
     const dir = await workspace({ provider: 'external', externalBaseUrl: 'https://from-file/v1' });
-    const config = loadConfig({ workspaceRoot: dir, env: { GENIE_PROVIDER: 'lmstudio' } });
+    const config = loadConfig({ workspaceRoot: dir, env: { ANNEAL_PROVIDER: 'lmstudio' } });
 
     expect(resolveEndpoint(config).provider).toBe('lmstudio');
   });

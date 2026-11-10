@@ -1,6 +1,6 @@
-# Contributing to genie
+# Contributing to Anneal
 
-genie is a local-first IDE, so a contribution should work **without** any cloud account, API key
+Anneal is a local-first IDE, so a contribution should work **without** any cloud account, API key
 or telemetry. Everything here runs on your machine against LM Studio (or any OpenAI-compatible
 endpoint you point it at).
 
@@ -36,7 +36,7 @@ You need it only when you want a real agent run (see
 3. **No new runtime dependency without a note in the PR** explaining why the existing code cannot
    do the job. The project deliberately ships a small dependency set.
 4. **Respect the local-first contract.** No telemetry, no remote calls that are not the model
-   endpoint the user configured, and never a key written into a tracked file. `.genie/` is
+   endpoint the user configured, and never a key written into a tracked file. `.anneal/` is
    git-ignored and must stay that way.
 5. **Strict TypeScript.** `strict`, `noUnusedLocals` and `noUnusedParameters` are on; `any` is not
    the answer. Comments should explain *why*, not restate the code.
@@ -48,7 +48,7 @@ You need it only when you want a real agent run (see
 - [ ] `npm run build` passes (it re-runs typecheck, then bundles the UI)
 - [ ] A bug fix has a regression test; a feature has coverage at its real boundary
 - [ ] README / `docs/` describe any user-visible change (a new tab, shortcut, env var or API route)
-- [ ] No `.genie/`, `dist/`, `pkg-out/`, secrets or editor noise in the diff (`git status` is clean
+- [ ] No `.anneal/`, `dist/`, `pkg-out/`, secrets or editor noise in the diff (`git status` is clean
       apart from what you meant to commit)
 - [ ] The PR template is filled in
 

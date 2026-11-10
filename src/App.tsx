@@ -50,7 +50,7 @@ export default function App() {
   const [newFile, setNewFile] = useState('');
   const [breakpoints, setBreakpoints] = useState<Array<{ path: string; line: number }>>(() => {
     try {
-      const raw = localStorage.getItem('genie.breakpoints');
+      const raw = localStorage.getItem('anneal.breakpoints');
       const parsed = raw ? (JSON.parse(raw) as unknown) : [];
       return Array.isArray(parsed) ? (parsed as Array<{ path: string; line: number }>) : [];
     } catch {
@@ -101,7 +101,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('genie.breakpoints', JSON.stringify(breakpoints));
+      localStorage.setItem('anneal.breakpoints', JSON.stringify(breakpoints));
     } catch {
       // personal storage can be unavailable; breakpoints still work this session
     }
@@ -312,7 +312,7 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <span className="logo">◆</span> genie
+          <span className="logo">◆</span> anneal
           <span className="tag">local-first</span>
         </div>
 

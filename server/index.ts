@@ -3,12 +3,12 @@ import { fileURLToPath } from 'node:url';
 import { createServer, finishShutdown } from './http';
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const WORKSPACE = path.resolve(process.env.GENIE_WORKSPACE ?? process.env.GENIE_ROOT ?? PROJECT_ROOT);
+const WORKSPACE = path.resolve(process.env.ANNEAL_WORKSPACE ?? process.env.ANNEAL_ROOT ?? PROJECT_ROOT);
 
 async function start(): Promise<void> {
   const server = await createServer({
     workspace: WORKSPACE,
-    ...(process.env.GENIE_EMBEDDED_DIST ? { embeddedDist: process.env.GENIE_EMBEDDED_DIST } : {}),
+    ...(process.env.ANNEAL_EMBEDDED_DIST ? { embeddedDist: process.env.ANNEAL_EMBEDDED_DIST } : {}),
   });
   await server.listen();
 
@@ -24,6 +24,6 @@ async function start(): Promise<void> {
 }
 
 start().catch((error) => {
-  console.error('[genie] failed to start:', error);
+  console.error('[anneal] failed to start:', error);
   process.exit(1);
 });

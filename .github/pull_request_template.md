@@ -20,5 +20,5 @@
 - [ ] One concern in this PR
 - [ ] Bug fixes include a regression test; new behaviour is covered at its real boundary
 - [ ] User-visible changes are reflected in `README.md` / `docs/` / `PROGRESS.md`
-- [ ] No `.genie/`, `dist/`, `pkg-out/`, keys or editor noise in the diff
+- [ ] No `.anneal/`, `dist/`, `pkg-out/`, keys or editor noise in the diff
 - [ ] No new runtime dependency, or the reason is explained above

@@ -75,7 +75,7 @@ export default function ChatPanel({
         )}
         {session.entries.map((entry) => (
           <div key={entry.id} className={`entry ${entry.kind} ${entry.status ?? ''}`}>
-            {entry.kind === 'assistant' && <div className="entry-label">genie</div>}
+            {entry.kind === 'assistant' && <div className="entry-label">anneal</div>}
             {entry.kind === 'user' && <div className="entry-label">you</div>}
             {entry.kind === 'tool' && (
               <div className="entry-label">

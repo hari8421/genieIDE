@@ -3,8 +3,8 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 
 const root = process.cwd();
-const apiPort = process.env.GENIE_PORT ?? '8787';
-const webPort = process.env.GENIE_WEB_PORT ?? '5173';
+const apiPort = process.env.ANNEAL_PORT ?? '8787';
+const webPort = process.env.ANNEAL_WEB_PORT ?? '5173';
 
 const children = [];
 
@@ -49,7 +49,7 @@ run(
   'api',
   process.execPath,
   ['--import', 'tsx', 'server/index.ts'],
-  { GENIE_HOST: '127.0.0.1', GENIE_PORT: apiPort, GENIE_WORKSPACE: root },
+  { ANNEAL_HOST: '127.0.0.1', ANNEAL_PORT: apiPort, ANNEAL_WORKSPACE: root },
   36,
 );
 
@@ -58,12 +58,12 @@ run(
   process.execPath,
   [path.join('node_modules', 'vite', 'bin', 'vite.js'), '--host', '0.0.0.0', '--port', webPort],
   {
-    GENIE_PORT: apiPort,
-    GENIE_WEB_PORT: webPort,
+    ANNEAL_PORT: apiPort,
+    ANNEAL_WEB_PORT: webPort,
     // Exact preview hostname only; never a blanket domain allowlist.
-    ...(process.env.GENIE_PREVIEW_HOST ? { GENIE_ALLOWED_HOSTS: process.env.GENIE_PREVIEW_HOST } : {}),
+    ...(process.env.ANNEAL_PREVIEW_HOST ? { ANNEAL_ALLOWED_HOSTS: process.env.ANNEAL_PREVIEW_HOST } : {}),
   },
   35,
 );
 
-console.log(`\n  genie  API http://127.0.0.1:${apiPort}   UI http://127.0.0.1:${webPort}\n`);
+console.log(`\n  anneal  API http://127.0.0.1:${apiPort}   UI http://127.0.0.1:${webPort}\n`);

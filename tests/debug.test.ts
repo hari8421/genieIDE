@@ -30,7 +30,7 @@ describe('debug session (Node inspector)', () => {
   });
 
   it('pauses on a breakpoint with locals, evaluates in the frame and steps', async () => {
-    const root = await tempDir('genie-debug-');
+    const root = await tempDir('anneal-debug-');
     await fs.writeFile(path.join(root, 'script.js'), SCRIPT, 'utf8');
 
     session = new DebugSession(root);
@@ -58,19 +58,19 @@ describe('debug session (Node inspector)', () => {
   }, 30_000);
 
   it('reports a missing script instead of hanging', async () => {
-    const root = await tempDir('genie-debug-');
+    const root = await tempDir('anneal-debug-');
     session = new DebugSession(root);
     await expect(session.start({ script: 'nope.js' })).rejects.toThrow(/script not found/);
   });
 
   it('refuses a script outside the workspace', async () => {
-    const root = await tempDir('genie-debug-');
+    const root = await tempDir('anneal-debug-');
     session = new DebugSession(root);
     await expect(session.start({ script: '../../etc/passwd' })).rejects.toThrow(/escapes the workspace/);
   });
 
   it('refuses to evaluate when not paused', async () => {
-    const root = await tempDir('genie-debug-');
+    const root = await tempDir('anneal-debug-');
     session = new DebugSession(root);
     await expect(session.evaluate('1 + 1')).rejects.toThrow(/paused frame/);
   });

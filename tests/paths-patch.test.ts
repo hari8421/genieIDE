@@ -22,7 +22,7 @@ describe('workspace path sandbox', () => {
 
   it('rejects symlinks that escape the workspace', async () => {
     const root = await tempDir();
-    const outside = await tempDir('genie-outside-');
+    const outside = await tempDir('anneal-outside-');
     await fs.writeFile(path.join(outside, 'secret.txt'), 'nope');
     await fs.symlink(outside, path.join(root, 'link'));
     expect(() => resolveInWorkspace(root, 'link/secret.txt')).toThrow(PathEscapeError);
@@ -30,7 +30,7 @@ describe('workspace path sandbox', () => {
 
   it('flags ignored directories and normalizes relative paths', async () => {
     expect(isIgnoredPath('node_modules/react/index.js')).toBe(true);
-    expect(isIgnoredPath('.genie/runs/x/journal.jsonl')).toBe(true);
+    expect(isIgnoredPath('.anneal/runs/x/journal.jsonl')).toBe(true);
     expect(isIgnoredPath('src/app.ts')).toBe(false);
     const root = await tempDir();
     await writeFiles(root, { 'a/b.ts': 'x' });

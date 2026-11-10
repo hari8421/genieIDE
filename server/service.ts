@@ -6,7 +6,7 @@ import { runAgent, type AgentEvent, type AgentResult } from './agent/loop';
 import { AGENT_SYSTEM_PROMPT, TASK_AGENT_PROMPT } from './agent/prompts';
 import type { ContextSection } from './context/builder';
 import { retrieveFiles } from './context/retrieval';
-import { geniePaths, loadConfig, resolveEndpoint, type Autonomy, type GenieConfig } from './config';
+import { annealPaths, loadConfig, resolveEndpoint, type Autonomy, type AnnealConfig } from './config';
 import { HookEngine, loadHooks, type HookDefinition, type HookEvent, type HookRunResult } from './hooks/hooks';
 import { LMStudioClient, type ChatMessage } from './llm/client';
 import { AgentMemory, type Fact, type MemorySnapshot } from './memory';
@@ -41,8 +41,8 @@ const MAX_SECTION_FILE_CHARS = 60_000;
  * Owns every long-lived resource: the LM Studio client, tool registry, journal
  * directory, spec store, checkpoints, steering and hooks.
  */
-export class GenieService {
-  config: GenieConfig;
+export class AnnealService {
+  config: AnnealConfig;
   private client: LMStudioClient;
   private readonly tools: Tool[];
   private readonly specStore: SpecStore;
@@ -53,12 +53,12 @@ export class GenieService {
   private mcpClients: McpClient[] = [];
   private mcpToolList: McpTool[] = [];
 
-  constructor(config: GenieConfig) {
+  constructor(config: AnnealConfig) {
     this.config = config;
     this.client = this.createClient();
-    this.memory = new AgentMemory(path.join(geniePaths(config.workspaceRoot).genie, 'memory'));
+    this.memory = new AgentMemory(path.join(annealPaths(config.workspaceRoot).anneal, 'memory'));
     this.tools = createDefaultTools();
-    const paths = geniePaths(config.workspaceRoot);
+    const paths = annealPaths(config.workspaceRoot);
     this.specStore = new SpecStore(paths.specs);
     this.checkpoints = new CheckpointStore(config.workspaceRoot, paths.checkpoints);
     this.hookEngine = new HookEngine([], async () => ({ ok: true }));
@@ -79,9 +79,9 @@ export class GenieService {
   }
 
   async init(): Promise<void> {
-    const paths = geniePaths(this.config.workspaceRoot);
+    const paths = annealPaths(this.config.workspaceRoot);
     await Promise.all([
-      ensureDir(paths.genie),
+      ensureDir(paths.anneal),
       ensureDir(paths.specs),
       ensureDir(paths.runs),
       ensureDir(paths.checkpoints),
@@ -101,14 +101,14 @@ export class GenieService {
   }
 
   async reloadHooks(): Promise<void> {
-    const loaded = await loadHooks(geniePaths(this.config.workspaceRoot).hooks);
+    const loaded = await loadHooks(annealPaths(this.config.workspaceRoot).hooks);
     const hooks = loaded.filter((entry) => !entry.error).map((entry) => entry.hook);
     this.hookEngine = new HookEngine(hooks, (hook, event) => this.executeHook(hook, event));
   }
 
-  async updateConfig(patch: Partial<GenieConfig>): Promise<GenieConfig> {
-    const paths = geniePaths(this.config.workspaceRoot);
-    const next: GenieConfig = { ...this.config, ...patch };
+  async updateConfig(patch: Partial<AnnealConfig>): Promise<AnnealConfig> {
+    const paths = annealPaths(this.config.workspaceRoot);
+    const next: AnnealConfig = { ...this.config, ...patch };
     const persisted = {
       lmStudioBaseUrl: next.lmStudioBaseUrl,
       model: next.model,
@@ -159,7 +159,7 @@ export class GenieService {
       memory: await this.memorySummary(),
       hooks: this.hookEngine.definitions.length,
       mcp: { servers: this.mcpClients.length, tools: this.mcpToolList.length },
-      runs: (await listRuns(geniePaths(this.config.workspaceRoot).runs)).length,
+      runs: (await listRuns(annealPaths(this.config.workspaceRoot).runs)).length,
     };
   }
 
@@ -195,7 +195,7 @@ export class GenieService {
         pinned: true,
       });
     }
-    const steering = await loadSteering(geniePaths(this.config.workspaceRoot).steering);
+    const steering = await loadSteering(annealPaths(this.config.workspaceRoot).steering);
     sections.push(...steeringSections(selectSteering(steering, files)));
 
     if (specId) {
@@ -383,12 +383,12 @@ export class GenieService {
   }
 
   async run(request: RunRequest): Promise<AgentResult> {
-    const journal = await RunJournal.create(geniePaths(this.config.workspaceRoot).runs, newRunId());
+    const journal = await RunJournal.create(annealPaths(this.config.workspaceRoot).runs, newRunId());
     return this.startRun(request, journal);
   }
 
   async resume(runId: string, request: RunRequest): Promise<AgentResult> {
-    const journal = await RunJournal.open(geniePaths(this.config.workspaceRoot).runs, runId);
+    const journal = await RunJournal.open(annealPaths(this.config.workspaceRoot).runs, runId);
     return this.startRun({ ...request, goal: request.goal || journal.summary().goal }, journal);
   }
 
@@ -404,11 +404,11 @@ export class GenieService {
   }
 
   async runs(): Promise<RunSummary[]> {
-    return listRuns(geniePaths(this.config.workspaceRoot).runs);
+    return listRuns(annealPaths(this.config.workspaceRoot).runs);
   }
 
   async runJournal(runId: string) {
-    const journal = await RunJournal.open(geniePaths(this.config.workspaceRoot).runs, runId);
+    const journal = await RunJournal.open(annealPaths(this.config.workspaceRoot).runs, runId);
     return { summary: journal.summary(), events: journal.all };
   }
 
@@ -417,7 +417,7 @@ export class GenieService {
     featureRequest: string,
     options: { onDelta?: (stage: string, text: string) => void; onStage?: (stage: string, status: string) => void; signal?: AbortSignal } = {},
   ): Promise<GenerateSpecResult> {
-    const steering = (await loadSteering(geniePaths(this.config.workspaceRoot).steering))
+    const steering = (await loadSteering(annealPaths(this.config.workspaceRoot).steering))
       .map((file) => `## ${file.name}\n${file.content}`)
       .join('\n\n');
     return generateSpec({
@@ -503,7 +503,7 @@ export class GenieService {
 
   async connectMcp(): Promise<Array<{ server: string; ok: boolean; tools?: number; error?: string }>> {
     await this.closeMcp();
-    const servers = await loadMcpConfig(geniePaths(this.config.workspaceRoot).mcp);
+    const servers = await loadMcpConfig(annealPaths(this.config.workspaceRoot).mcp);
     const results: Array<{ server: string; ok: boolean; tools?: number; error?: string }> = [];
     this.mcpToolList = [];
     for (const server of servers) {
@@ -534,11 +534,11 @@ export class GenieService {
   }
 
   async steeringFiles() {
-    return loadSteering(geniePaths(this.config.workspaceRoot).steering);
+    return loadSteering(annealPaths(this.config.workspaceRoot).steering);
   }
 
   async ensureWorkspace(): Promise<void> {
-    await ensureDir(path.join(this.config.workspaceRoot, '.genie'));
+    await ensureDir(path.join(this.config.workspaceRoot, '.anneal'));
   }
 }
 
@@ -568,9 +568,9 @@ function mcpToolsFor(clients: McpClient[], tools: McpTool[]): Tool[] {
   return out;
 }
 
-export async function createService(workspaceRoot: string, overrides: Partial<GenieConfig> = {}): Promise<GenieService> {
+export async function createService(workspaceRoot: string, overrides: Partial<AnnealConfig> = {}): Promise<AnnealService> {
   const config = loadConfig({ workspaceRoot, overrides });
-  const service = new GenieService(config);
+  const service = new AnnealService(config);
   await service.init();
   return service;
 }

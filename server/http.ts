@@ -4,7 +4,7 @@ import path from 'node:path';
 import { loadConfig } from './config';
 import { DebugSession, type DebugAction } from './debug/session';
 import { collectSources } from './intel/sources';
-import { createService, type GenieService } from './service';
+import { createService, type AnnealService } from './service';
 import { loadSteering } from './steering/steering';
 import { PathEscapeError, isIgnoredPath, resolveInWorkspace, toRelative } from './util/paths';
 
@@ -586,7 +586,7 @@ function registerRoutes(): void {
   });
 
   route('GET', '/api/steering', async ({ res }) => {
-    const files = await loadSteering(path.join(WORKSPACE, '.genie', 'steering'));
+    const files = await loadSteering(path.join(WORKSPACE, '.anneal', 'steering'));
     json(res, 200, { steering: files.map(({ name, inclusion, globs, content }) => ({ name, inclusion, globs, length: content.length })) });
   });
 }
@@ -602,14 +602,14 @@ const CONTENT_TYPES: Record<string, string> = {
   '.map': 'application/json',
 };
 
-const PORT = Number(process.env.GENIE_PORT ?? 8787);
-const HOST = process.env.GENIE_HOST ?? '127.0.0.1';
-const WORKSPACE = path.resolve(process.env.GENIE_WORKSPACE ?? process.env.GENIE_ROOT ?? process.cwd());
+const PORT = Number(process.env.ANNEAL_PORT ?? 8787);
+const HOST = process.env.ANNEAL_HOST ?? '127.0.0.1';
+const WORKSPACE = path.resolve(process.env.ANNEAL_WORKSPACE ?? process.env.ANNEAL_ROOT ?? process.cwd());
 // Resolved lazily-ish: the desktop bundle passes an explicit directory, and the
 // dev server serves ./dist from the project root.
-const EMBEDDED_DIST = process.env.GENIE_EMBEDDED_DIST ?? path.join(process.cwd(), 'dist');
+const EMBEDDED_DIST = process.env.ANNEAL_EMBEDDED_DIST ?? path.join(process.cwd(), 'dist');
 
-let service: GenieService;
+let service: AnnealService;
 let debugSession: DebugSession | null = null;
 
 function parseBreakpoints(value: unknown): Array<{ path: string; line: number }> {
@@ -687,9 +687,9 @@ export async function createServer({ workspace, embeddedDist }: ServerOptions): 
 
   let started: Promise<void>;
   server.listen(PORT, HOST, () => {
-    console.log(`[genie] API listening on http://${HOST}:${PORT}`);
-    console.log(`[genie] workspace: ${workspace}`);
-    console.log(`[genie] LM Studio: ${config.lmStudioBaseUrl} (model: ${config.model})`);
+    console.log(`[anneal] API listening on http://${HOST}:${PORT}`);
+    console.log(`[anneal] workspace: ${workspace}`);
+    console.log(`[anneal] LM Studio: ${config.lmStudioBaseUrl} (model: ${config.model})`);
     started = Promise.resolve();
   });
 
@@ -701,7 +701,7 @@ export async function createServer({ workspace, embeddedDist }: ServerOptions): 
 }
 
 export async function finishShutdown(): Promise<void> {
-  console.log('[genie] shutting down');
+  console.log('[anneal] shutting down');
   await stopDebugSession();
   await service.closeMcp().catch(() => undefined);
   if (service instanceof Object && 'close' in service) {

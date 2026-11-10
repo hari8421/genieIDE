@@ -16,7 +16,7 @@ export const IGNORED_DIRS = new Set([
   'build',
   '.next',
   'coverage',
-  '.genie',
+  '.anneal',
   '.venv',
   '__pycache__',
 ]);
