@@ -1,0 +1,45 @@
+name: CI
+
+# The contributing guides tell people to run these three checks before opening a
+# pull request; this makes them non-optional on main and on every PR into it.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A newer push to the same branch makes the older run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Tests, types and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the ">=20" engine in package.json; npm cache keyed on the lockfile.
+          node-version: 22
+          cache: npm
+
+      # `npm ci` installs exactly the lockfile, so CI cannot drift from it.
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      # Runs `vite build` after a second typecheck pass, which keeps the published
+      # build identical to a local `npm run build`.
+      - name: Build
+        run: npm run build

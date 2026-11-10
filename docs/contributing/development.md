@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Node.js 20 or newer (CI and the maintainers use 24)
+- Node.js 20 or newer (CI runs 22)
 - npm (the repo commits `package-lock.json`; `npm ci` is the supported install)
 - LM Studio only if you want a real model run. Tests, typecheck, build and most UI work do not
   need it.
@@ -99,8 +99,9 @@ Data written at runtime lives under `.genie/` in the workspace and is git-ignore
 | `npm start` | serve API + `dist/` on `:8787` |
 | `npm run build-desktop` | build, bundle the server with esbuild, then `pkg` three binaries |
 
-There is no CI workflow in the repository yet, so these gates are yours to run locally before a
-pull request. Treat a red `npm test` as a blocker.
+`.github/workflows/ci.yml` runs `npm ci` plus these three gates on every push to `main` and every
+pull request into it, so a broken change shows up on the PR. Branch protection on `main` is what
+makes a red run block the merge. Either way, run the gates locally first to shorten the loop.
 
 ## How to add things
 

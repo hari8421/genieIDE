@@ -23,6 +23,7 @@ Stage: **M2 — local-first agentic IDE with desktop executables, pluggable prov
 | Transcript reducer | `tests/session.test.ts` | wrapped `{type, step, data}` events, delta streaming, tool pairing, unwrapped `result`/`error` |
 | UI in a browser | headless Chromium against `npm run dev` | quick open, file open, agent run, spec panel, runs, undo, models, plus per-tab undo history and the unsaved-close guard — screenshots in `docs/images/` (stub OpenAI-compatible endpoint, not LM Studio) |
 | Preview host | `curl -H 'Host: <preview>'` | **403 → 200** after `GENIE_ALLOWED_HOSTS` wiring (Vite 5 ignores `__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS`) |
+| CI workflow | `.github/workflows/ci.yml` | added: `npm ci`, typecheck, tests and build on push/PR to `main`. **Not yet observed on a GitHub runner** — the steps are the ones verified locally above |
 | HTTP smoke test | bundled server + `/api/health`, `/api/files` | passing |
 | Real LM Studio end-to-end | requires a local model | **not verified here** — no model server exists in the cloud runner |
 | macOS / Windows binaries executed | requires those hosts | **not verified** — format-checked (Mach-O arm64, PE32+ x86-64) but only the Linux ELF was run |
@@ -186,10 +187,9 @@ overflow, cancellation and resume paths.
 7. Agent memory is per workspace and plain text. There is no conflict resolution across
    concurrent processes, and no semantic search over facts — the core file is a small pinned list
    by design.
-
-7. The debugger is Node-only and applies no source maps; a script that finishes while the debugger is
+8. The debugger is Node-only and applies no source maps; a script that finishes while the debugger is
    still attached stays `running` until Stop, because Node keeps the debuggee alive.
-8. Peek and navigation are JS/TS only: other languages keep editing and highlighting but have no
+9. Peek and navigation are JS/TS only: other languages keep editing and highlighting but have no
    semantic navigation, since there is no LSP client.
 
 ---
@@ -205,5 +205,3 @@ overflow, cancellation and resume paths.
 6. Sign macOS/Windows desktop builds and add a release workflow that uploads the three binaries.
 7. Route the debugger through DAP adapters (Python, Go) and apply source maps.
 8. Add an LSP client for non-TS languages so peek works everywhere.
-9. Add a CI workflow that runs `npm test`, `npm run typecheck` and `npm run build` on every pull
-   request, so the gates in `docs/contributing/pull-requests.md` are enforced rather than trusted.

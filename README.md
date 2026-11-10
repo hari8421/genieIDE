@@ -1,5 +1,7 @@
 # genie
 
+![CI](https://github.com/hari8421/genieIDE/actions/workflows/ci.yml/badge.svg)
+
 A local-first, spec-driven agentic IDE in the spirit of Kiro — but every model call goes to
 **your own LM Studio server**. No cloud account, no API keys, no telemetry.
 

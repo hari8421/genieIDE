@@ -25,7 +25,7 @@ Keep the branch focused on one concern. If you notice an unrelated bug, open a s
 ## 2. Do the work
 
 - Write the change, then write or update the test that proves it.
-- Run the gates locally (there is no CI workflow yet):
+- Run the gates locally (CI runs the same three, but a local run is faster to iterate on):
 
 ```bash
 npm test
