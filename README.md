@@ -37,6 +37,7 @@ OpenAI-compatible endpoint.
 | Debugger: breakpoints, stepping, locals, evaluate | ✅ | `server/debug/session.ts`, `src/components/DebugPanel.tsx` |
 | Peek definition/usages, hover, outline, diagnostics | ✅ | `src/editor/intel.ts` (Monaco TS service) |
 | Autopilot vs supervised tool approval | ✅ | `server/agent/loop.ts` |
+| Quick open (Ctrl/Cmd+P), per-file editor state, unsaved-close guard | ✅ | `src/components/QuickOpen.tsx`, `src/App.tsx` |
 | Local Monaco editor with bundled workers (works offline) | ✅ | `src/monaco-setup.ts` |
 | LSP, debugger, extension marketplace, inline ghost text | ❌ | out of scope (needs Code OSS fork) |
 
@@ -156,20 +157,78 @@ Scripts start under `node --inspect-brk`: `.js` works out of the box, `.ts` uses
 stripping (or `--experimental-strip-types` on 22.x). The debugger is Node-only — there is no DAP
 adapter layer for Python, Go or browser targets, and source maps are not applied.
 
-## Daily use
+## Using the app
 
-1. **Specs tab** — create a spec, describe the feature, hit *Generate spec*. You get
-   `requirements.md`, `design.md`, `tasks.md` in `.genie/specs/<id>/`. Edit them; they are plain
-   markdown and the agent reads them as high-priority context.
-2. **Run next task** — the agent implements the next unchecked task, and checks it off only when
-   the run completes. Every task run gets a fresh context window.
-3. **Chat** — free-form agent runs. Tick files in the tree to pin them into context.
-4. **Undo tab** — a snapshot is taken before every mutating tool call. Diff or restore it.
-5. **Runs tab** — every run is journaled. Resume an interrupted run; completed steps and tool
-   calls are not replayed.
-6. **Models tab** — switch between LM Studio and an external OpenAI-compatible API, and review the
-   agent's memory. Facts there are pinned into every prompt; the agent also writes its own with the
-   `remember` tool.
+The screenshots below are captured from the running app with this repository as the workspace. The
+demo run used a small local OpenAI-compatible stub endpoint (no cloud calls, no API key), so the
+model's wording is canned; everything else — tools, journal, checkpoints, transcript — is real.
+
+### 1. Open a workspace and a file
+
+![The genie workspace: file tree, Monaco editor, agent panel and status bar](docs/images/01-workspace.png)
+
+The status bar tells you whether the model endpoint answers, which workspace is open, and how much
+of the context budget the last prompt used. Tick the checkbox beside a file to pin it to the agent's
+context without opening it.
+
+### 2. Jump to any file with Ctrl/Cmd+P
+
+![Quick open filtering the workspace by file name](docs/images/02-quick-open.png)
+
+Type a few characters of the path; `↑`/`↓` moves, `Enter` opens, `Esc` closes. Tabs keep their own
+undo history, cursor and scroll position when you switch between them.
+
+### 3. Ask the agent
+
+![An agent run with tool calls and a completed result](docs/images/03-agent-run.png)
+
+Describe a goal and press **Run agent** (or Ctrl/Cmd+Enter). Every step is shown as it happens:
+the model's text, each tool call with its arguments and result, self-heal notices, and the final
+result with step and tool-call counts. **Autopilot** edits immediately; **Supervised** asks before
+each tool call. A write is always preceded by a checkpoint, so nothing is lost.
+
+### 4. Specs: requirements → design → tasks
+
+![The Specs tab with generated documents and a task checklist](docs/images/04-specs.png)
+
+Create a spec, describe the feature, and hit **Generate spec**. You get `requirements.md`,
+`design.md` and `tasks.md` in `.genie/specs/<id>/` — plain markdown you can edit, which the agent
+treats as high-priority context. **Run next task** implements the first unchecked task and checks
+it off only when the run succeeds; **Run** on a row implements just that task.
+
+### 5. Undo: diff and restore
+
+![The Undo tab listing a checkpoint and the files it would change](docs/images/05-undo.png)
+
+A snapshot is taken before every mutating tool call, and you can take one by hand with
+**Snapshot now**. Open a checkpoint to see which files differ, then **Restore** to put the workspace
+back — including deleting files that did not exist yet.
+
+### 6. Models and memory
+
+![The Models tab with the provider switch and pinned agent memory](docs/images/06-models.png)
+
+Switch between LM Studio and any external OpenAI-compatible API without editing files. Facts under
+*Agent memory* are pinned into every prompt (the agent also writes its own with the `remember`
+tool), which is how conventions survive across runs and restarts.
+
+### 7. Runs never lose finished work
+
+![The Runs tab with journaled runs and a resume action](docs/images/07-runs.png)
+
+Every run is journaled under `.genie/runs/<id>/journal.jsonl`. **Resume** continues an interrupted
+run from its last completed step instead of replaying the tools it already ran.
+
+### Keyboard shortcuts
+
+| Shortcut | Action |
+| --- | --- |
+| Ctrl/Cmd+P | Quick open: jump to any file in the workspace |
+| Ctrl/Cmd+S | Save the active file |
+| Ctrl/Cmd+Enter | Run the agent on the current goal |
+| F9 | Toggle a breakpoint on the current line |
+| F12 / Alt+F12 / Shift+F12 | Go to / peek definition, find usages |
+| Ctrl/Cmd+Shift+O | File outline |
 
 ## How the self-healing works
 
@@ -204,8 +263,11 @@ server/
   index.ts      dev entrypoint; boots http.ts
 scripts/        dev.mjs, build-desktop.mjs
 src/            React + Monaco UI (src/editor/intel.ts wires the TS service)
-tests/          vitest suite (117 tests)
+tests/          vitest suite (122 tests)
 docs/DESIGN.md  detailed design
+docs/contributing/  setup, architecture notes and the pull-request guide
+docs/images/    screenshots used by this README
+.github/        pull request template
 PROGRESS.md     what is done, what is not
 ```
 
@@ -222,9 +284,26 @@ compaction, patch atomicity, path-escape rejection (including symlinks), journal
 torn writes, checkpoint restore, hook dispatch isolation, spec task parsing, LM Studio SSE
 streaming and tool-call assembly, agent resume without replaying tools, context-overflow
 healing, MCP stdio round-trips, agent memory (fact dedup, core line cap, event pruning), provider
-resolution, and two live HTTP integration tests against a temp workspace: one for the API surface,
+resolution, the SSE transcript reducer (wrapped agent events vs unwrapped results), and two live
+HTTP integration tests against a temp workspace: one for the API surface,
 and one that drives a stub OpenAI-compatible server and asserts against the actual request bodies
 that completions reach the configured provider with its key and that stored facts reach the prompt.
+
+## Contributing
+
+Setup, architecture notes and the full pull-request flow live in
+[docs/contributing](docs/contributing/README.md): start with
+[development.md](docs/contributing/development.md) for the dev loop, then
+[pull-requests.md](docs/contributing/pull-requests.md) for branching, commits, the review checklist
+and what to do when a branch falls behind. The short version:
+
+```bash
+npm ci && npm run dev     # work
+npm test && npm run typecheck && npm run build   # gates
+```
+
+No LM Studio is needed to run the tests or build; one concern per pull request, a regression test
+with every fix, and no secrets or `.genie/` state in the diff.
 
 ## Safety
 
